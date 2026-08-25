@@ -24,3 +24,7 @@ npm run build
 ```
 
 Camera access requires HTTPS or localhost.
+
+## Verified devices
+
+- iPhone / Safari: native AR Quick Look launches successfully, detects a real floor surface, and places the chair at real-world scale. Manually verified on 26 August 2026.
