@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 type Mode = "home" | "clothes" | "space";
 const clothes = [
@@ -9,9 +9,7 @@ const clothes = [
   { name: "Куртка Form", type: "Матовый нейлон", price: "31 500 ₽", color: "#815d3c" },
 ];
 const objects = [
-  { name: "Кресло Cloud", type: "Букле · 82 × 88 см", price: "67 000 ₽", color: "#d2bda8" },
-  { name: "Лампа Orbit", type: "Сталь · 148 см", price: "29 500 ₽", color: "#c7b06c" },
-  { name: "Стол Mono", type: "Дуб · 120 × 70 см", price: "54 000 ₽", color: "#8b6547" },
+  { name: "Кресло Cloud", type: "3D-модель · реальный масштаб", price: "67 000 ₽", color: "#d2bda8" },
 ];
 
 export default function Home() {
@@ -20,8 +18,9 @@ export default function Home() {
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [size, setSize] = useState("M");
-  const [placed, setPlaced] = useState(false);
+  const [arStatus, setArStatus] = useState("3D-модель загружена");
   const videoRef = useRef<HTMLVideoElement>(null);
+  const arRef = useRef<HTMLElement & { activateAR?: () => Promise<void>; canActivateAR?: boolean }>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const catalog = mode === "space" ? objects : clothes;
 
@@ -36,9 +35,21 @@ export default function Home() {
   }
   function closeStudio() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null; setCameraOn(false); setPlaced(false); setMode("home");
+    streamRef.current = null; setCameraOn(false); setMode("home");
   }
-  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+  useEffect(() => {
+    import("@google/model-viewer");
+    return () => streamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  async function openAR() {
+    setArStatus("Запускаем системный AR…");
+    try {
+      await arRef.current?.activateAR?.();
+    } catch {
+      setArStatus("AR не поддерживается этим браузером. Откройте страницу в Safari или Chrome на телефоне.");
+    }
+  }
 
   return <main>
     <nav className="nav shell">
@@ -70,17 +81,39 @@ export default function Home() {
     </> : <section className="studio shell">
       <header className="studio-head"><div><button className="back" onClick={closeStudio}>← Назад</button><p>{mode === "clothes" ? "Виртуальная примерочная" : "AR-пространство"}</p><h1>{mode === "clothes" ? "Ваш образ — в движении" : "Посмотрите предмет у себя"}</h1></div><div className="live-pill"><i /> LIVE · {cameraOn ? "30 FPS" : "ГОТОВО"}</div></header>
       <div className="studio-grid">
-        <aside className="catalog"><div className="catalog-title"><span>Коллекция</span><small>{catalog.length} предмета</small></div>{catalog.map((item,index)=><button key={item.name} className={`product ${active===index?"active":""}`} onClick={()=>{setActive(index);setPlaced(false)}}><i style={{background:item.color}}><b>{mode === "space" ? (index === 1 ? "◯" : "▰") : "♢"}</b></i><span><strong>{item.name}</strong><small>{item.type}</small><em>{item.price}</em></span><b className="select-mark">{active===index?"✓":"+"}</b></button>)}</aside>
-        <div className={`camera ${cameraOn?"camera-on":""}`} onClick={()=>mode==="space"&&cameraOn&&setPlaced(true)}>
-          {cameraOn?<video ref={videoRef} autoPlay playsInline muted/>:<div className="camera-placeholder"><span>◎</span><h3>Камера готова</h3><p>{mode === "clothes" ? "Встаньте так, чтобы было видно верхнюю часть тела" : "Наведите камеру на свободное место на полу"}</p></div>}
-          {cameraOn&&mode==="clothes"&&<div className="garment-overlay" style={{"--garment":catalog[active].color} as React.CSSProperties}><i/><span>{catalog[active].name}</span></div>}
-          {cameraOn&&mode==="space"&&placed&&<div className={`ar-object object-${active}`} style={{"--object":catalog[active].color} as React.CSSProperties}><i/><span>{catalog[active].name}</span></div>}
-          {cameraOn&&mode==="space"&&!placed&&<div className="scan-line"><span>Перемещайте телефон для поиска поверхности</span></div>}
-          <div className="camera-badges"><span>AI TRACKING</span><span>{mode==="space"?"AR SCALE 1:1":"BODY MESH"}</span></div>
-        </div>
+        <aside className="catalog"><div className="catalog-title"><span>Коллекция</span><small>{catalog.length} {catalog.length === 1 ? "предмет" : "предмета"}</small></div>{catalog.map((item,index)=><button key={item.name} className={`product ${active===index?"active":""}`} onClick={()=>setActive(index)}><i style={{background:item.color}}><b>{mode === "space" ? "▰" : "♢"}</b></i><span><strong>{item.name}</strong><small>{item.type}</small><em>{item.price}</em></span><b className="select-mark">{active===index?"✓":"+"}</b></button>)}</aside>
+        {mode === "space" ? <div className="ar-stage">
+          {React.createElement("model-viewer", {
+            ref: arRef,
+            src: "/chair.glb",
+            alt: "Объёмная 3D-модель кресла Cloud",
+            ar: true,
+            "ar-modes": "webxr scene-viewer quick-look",
+            "ar-placement": "floor",
+            "ar-scale": "fixed",
+            "camera-controls": true,
+            "touch-action": "pan-y",
+            "shadow-intensity": "1.4",
+            "shadow-softness": "0.8",
+            exposure: "1",
+            "environment-image": "neutral",
+            "camera-orbit": "35deg 72deg 2.7m",
+            "min-camera-orbit": "auto auto 1.5m",
+            "max-camera-orbit": "auto auto 5m",
+            onLoad: () => setArStatus("Модель готова — вращайте её или откройте AR"),
+            onError: () => setArStatus("Не удалось загрузить 3D-модель"),
+            onArStatus: (event: CustomEvent<{status: string}>) => setArStatus(event.detail.status === "object-placed" ? "Кресло размещено в пространстве" : event.detail.status === "failed" ? "AR не запустился — используйте Safari на iPhone или Chrome на Android" : "Ищем поверхность…"),
+          }, React.createElement("button", { slot: "ar-button", className: "native-ar-button" }, "Разместить у себя", React.createElement("span", null, "↗")))}
+          <div className="ar-room"><i className="ar-floor"/><i className="ar-window"/><span>Проведите пальцем, чтобы осмотреть кресло со всех сторон</span></div>
+          <div className="camera-badges"><span>REAL 3D</span><span>AR SCALE 1:1</span></div>
+        </div> : <div className={`camera ${cameraOn?"camera-on":""}`}>
+          {cameraOn?<video ref={videoRef} autoPlay playsInline muted/>:<div className="camera-placeholder"><span>◎</span><h3>Камера готова</h3><p>Встаньте так, чтобы было видно верхнюю часть тела</p></div>}
+          {cameraOn&&<div className="garment-overlay" style={{"--garment":catalog[active].color} as React.CSSProperties}><i/><span>{catalog[active].name}</span></div>}
+          <div className="camera-badges"><span>AI TRACKING</span><span>BODY MESH</span></div>
+        </div>}
         <aside className="controls"><div><p className="control-label">Выбрано</p><h3>{catalog[active].name}</h3><span className="material-dot" style={{background:catalog[active].color}}/></div>
-          {mode==="clothes"?<div><p className="control-label">Размер</p><div className="sizes">{["XS","S","M","L","XL"].map(s=><button className={size===s?"active":""} onClick={()=>setSize(s)} key={s}>{s}</button>)}</div><p className="fit-note">Рекомендуем <strong>M</strong> по вашей калибровке</p></div>:<div><p className="control-label">Масштаб</p><div className="scale-row"><span>1:1</span><input aria-label="Масштаб предмета" type="range" min="80" max="120" defaultValue="100"/></div><p className="fit-note">Реальные размеры товара сохранены</p></div>}
-          {!cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:<button className="primary" onClick={()=>mode==="space"?setPlaced(!placed):null}>{mode==="space"?(placed?"Переместить предмет":"Разместить предмет"):"Сделать снимок"}<span>→</span></button>}
+          {mode==="clothes"?<div><p className="control-label">Размер</p><div className="sizes">{["XS","S","M","L","XL"].map(s=><button className={size===s?"active":""} onClick={()=>setSize(s)} key={s}>{s}</button>)}</div><p className="fit-note">Рекомендуем <strong>M</strong> по вашей калибровке</p></div>:<div><p className="control-label">Настоящий AR</p><div className="ar-features"><span>Поверхности</span><span>Окклюзия</span><span>Масштаб 1:1</span><span>Тени</span></div><p className="fit-note ar-state">{arStatus}</p></div>}
+          {mode === "space" ? <button className="primary" onClick={openAR}>Открыть системный AR <span>↗</span></button> : !cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:<button className="primary">Сделать снимок <span>→</span></button>}
           {cameraError&&<p className="error">{cameraError}</p>}<p className="privacy">Кадры обрабатываются на вашем устройстве и не сохраняются.</p>
         </aside>
       </div>
