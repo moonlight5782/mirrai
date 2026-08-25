@@ -42,12 +42,18 @@ export default function Home() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode === "space" ? "environment" : "user", width: { ideal: 1280 } }, audio: false });
       streamRef.current = stream;
       setCameraOn(true);
-      requestAnimationFrame(() => { if (videoRef.current) videoRef.current.srcObject = stream; });
     } catch { setCameraError("Камера недоступна. Разрешите доступ в настройках браузера."); }
   }
   function closeStudio() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null; setCameraOn(false); setMode("home");
+  }
+  async function retryCamera() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setCameraOn(false);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await startCamera();
   }
   useEffect(() => {
     import("@google/model-viewer");
@@ -57,6 +63,25 @@ export default function Home() {
       poseRef.current?.close();
     };
   }, []);
+
+  useEffect(() => {
+    if (!cameraOn || !streamRef.current || !videoRef.current) return;
+    const video = videoRef.current;
+    video.srcObject = streamRef.current;
+    video.muted = true;
+    video.setAttribute("playsinline", "true");
+    const playCamera = async () => {
+      try {
+        await video.play();
+        setCameraError("");
+      } catch {
+        setCameraError("Браузер остановил воспроизведение камеры. Нажмите экран и включите камеру ещё раз.");
+      }
+    };
+    if (video.readyState >= 1) playCamera();
+    else video.addEventListener("loadedmetadata", playCamera, { once: true });
+    return () => video.removeEventListener("loadedmetadata", playCamera);
+  }, [cameraOn]);
 
   useEffect(() => {
     if (!cameraOn || mode !== "clothes") return;
@@ -210,14 +235,14 @@ export default function Home() {
           <div className="ar-room"><i className="ar-floor"/><i className="ar-window"/><span>Проведите пальцем, чтобы осмотреть кресло со всех сторон</span></div>
           <div className="camera-badges"><span>REAL 3D</span><span>AR SCALE 1:1</span></div>
         </div> : <div className={`camera ${cameraOn?"camera-on":""}`}>
-          {cameraOn?<video ref={videoRef} autoPlay playsInline muted/>:<div className="camera-placeholder"><span>◎</span><h3>Камера готова</h3><p>Встаньте так, чтобы было видно верхнюю часть тела</p></div>}
+          {cameraOn?<video ref={videoRef} autoPlay playsInline muted onCanPlay={(event)=>event.currentTarget.play().catch(()=>undefined)}/>:<div className="camera-placeholder"><span>◎</span><h3>Камера готова</h3><p>Встаньте так, чтобы было видно верхнюю часть тела</p></div>}
           {cameraOn&&<canvas ref={canvasRef} className="pose-canvas" aria-label="Одежда, синхронизированная с положением тела"/>}
           {cameraOn&&<div className="tracking-state"><i/><span>{trackingStatus}</span></div>}
           <div className="camera-badges"><span>AI TRACKING</span><span>BODY MESH</span></div>
         </div>}
         <aside className="controls"><div><p className="control-label">Выбрано</p><h3>{catalog[active].name}</h3><span className="material-dot" style={{background:catalog[active].color}}/></div>
           {mode==="clothes"?<div><p className="control-label">Размер</p><div className="sizes">{["XS","S","M","L","XL"].map(s=><button className={size===s?"active":""} onClick={()=>setSize(s)} key={s}>{s}</button>)}</div><p className="fit-note">Рекомендуем <strong>M</strong> по вашей калибровке</p></div>:<div><p className="control-label">Настоящий AR</p><div className="ar-features"><span>Поверхности</span><span>Окклюзия</span><span>Масштаб 1:1</span><span>Тени</span></div><p className="fit-note ar-state">{arStatus}</p></div>}
-          {mode === "space" ? <button className="primary" onClick={openAR}>Открыть системный AR <span>↗</span></button> : !cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:<button className="primary">Сделать снимок <span>→</span></button>}
+          {mode === "space" ? <button className="primary" onClick={openAR}>Открыть системный AR <span>↗</span></button> : !cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:cameraError?<button className="primary" onClick={retryCamera}>Повторить запуск <span>↻</span></button>:<button className="primary">Сделать снимок <span>→</span></button>}
           {cameraError&&<p className="error">{cameraError}</p>}<p className="privacy">Кадры обрабатываются на вашем устройстве и не сохраняются.</p>
         </aside>
       </div>
