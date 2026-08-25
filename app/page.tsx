@@ -17,12 +17,24 @@ export default function Home() {
   const [active, setActive] = useState(0);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [trackingStatus, setTrackingStatus] = useState("Модель тела готовится…");
   const [size, setSize] = useState("M");
   const [arStatus, setArStatus] = useState("3D-модель загружена");
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const poseRef = useRef<{ detectForVideo: (video: HTMLVideoElement, time: number) => { landmarks: Array<Array<{x:number;y:number;visibility?:number}>> }; close: () => void } | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const smoothPoseRef = useRef<Array<{x:number;y:number}> | null>(null);
+  const trackingStatusRef = useRef("");
   const arRef = useRef<HTMLElement & { activateAR?: () => Promise<void>; canActivateAR?: boolean }>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const catalog = mode === "space" ? objects : clothes;
+
+  function updateTrackingStatus(value: string) {
+    if (trackingStatusRef.current === value) return;
+    trackingStatusRef.current = value;
+    setTrackingStatus(value);
+  }
 
   async function startCamera() {
     setCameraError("");
@@ -39,8 +51,99 @@ export default function Home() {
   }
   useEffect(() => {
     import("@google/model-viewer");
-    return () => streamRef.current?.getTracks().forEach((track) => track.stop());
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      poseRef.current?.close();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!cameraOn || mode !== "clothes") return;
+    let cancelled = false;
+    async function initializeTracking() {
+      try {
+        updateTrackingStatus("Загружаем модель тела…");
+        const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
+        const vision = await FilesetResolver.forVisionTasks("/mediapipe-wasm");
+        const landmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: "/pose_landmarker_lite.task", delegate: "GPU" },
+          runningMode: "VIDEO",
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.55,
+          minPosePresenceConfidence: 0.55,
+          minTrackingConfidence: 0.55,
+        });
+        if (cancelled) { landmarker.close(); return; }
+        poseRef.current = landmarker;
+        updateTrackingStatus("Встаньте перед камерой");
+        runPoseLoop();
+      } catch {
+        updateTrackingStatus("Не удалось запустить отслеживание тела");
+      }
+    }
+    initializeTracking();
+    return () => {
+      cancelled = true;
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      poseRef.current?.close();
+      poseRef.current = null;
+      smoothPoseRef.current = null;
+    };
+  }, [cameraOn, mode, active]);
+
+  function runPoseLoop() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const pose = poseRef.current;
+    if (!video || !canvas || !pose) return;
+    if (video.readyState >= 2 && video.videoWidth) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      const result = pose.detectForVideo(video, performance.now());
+      const points = result.landmarks[0];
+      const context = canvas.getContext("2d");
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+      if (points && context && [11,12,23,24].every(index => (points[index].visibility ?? 1) > .45)) {
+        const indexes = [11,12,13,14,23,24];
+        const raw = indexes.map(index => ({ x: points[index].x * canvas.width, y: points[index].y * canvas.height }));
+        const previous = smoothPoseRef.current;
+        const smooth = raw.map((point,index) => previous ? ({ x: previous[index].x * .72 + point.x * .28, y: previous[index].y * .72 + point.y * .28 }) : point);
+        smoothPoseRef.current = smooth;
+        drawGarment(context, smooth, canvas.width);
+        updateTrackingStatus("Тело отслеживается · LIVE");
+      } else updateTrackingStatus("Покажите плечи и корпус полностью");
+    }
+    animationRef.current = requestAnimationFrame(runPoseLoop);
+  }
+
+  function drawGarment(context: CanvasRenderingContext2D, pose: Array<{x:number;y:number}>, width: number) {
+    const [leftShoulder,rightShoulder,leftElbow,rightElbow,leftHip,rightHip] = pose;
+    const shoulderWidth = Math.hypot(rightShoulder.x-leftShoulder.x,rightShoulder.y-leftShoulder.y);
+    const padding = shoulderWidth * .16;
+    const sleeve = shoulderWidth * .24;
+    context.save();
+    const gradient = context.createLinearGradient(leftShoulder.x,leftShoulder.y,rightHip.x,rightHip.y);
+    gradient.addColorStop(0, clothes[active].color);
+    gradient.addColorStop(1, active === 0 ? "#080807" : active === 1 ? "#aab8b8" : "#553c29");
+    context.fillStyle = gradient;
+    context.globalAlpha = .9;
+    context.shadowColor = "#00000055"; context.shadowBlur = width * .012;
+    context.beginPath();
+    context.moveTo(leftShoulder.x-padding,leftShoulder.y-padding*.35);
+    context.lineTo(leftElbow.x-sleeve,leftElbow.y);
+    context.lineTo(leftElbow.x+sleeve*.25,leftElbow.y+sleeve*.35);
+    context.lineTo(leftHip.x-padding*.4,leftHip.y+padding);
+    context.lineTo(rightHip.x+padding*.4,rightHip.y+padding);
+    context.lineTo(rightElbow.x-sleeve*.25,rightElbow.y+sleeve*.35);
+    context.lineTo(rightElbow.x+sleeve,rightElbow.y);
+    context.lineTo(rightShoulder.x+padding,rightShoulder.y-padding*.35);
+    context.quadraticCurveTo((leftShoulder.x+rightShoulder.x)/2,(leftShoulder.y+rightShoulder.y)/2+padding*1.1,leftShoulder.x-padding,leftShoulder.y-padding*.35);
+    context.closePath(); context.fill();
+    context.strokeStyle="#ffffff30"; context.lineWidth=Math.max(1,width*.002); context.stroke();
+    context.restore();
+  }
 
   async function openAR() {
     setArStatus("Запускаем системный AR…");
@@ -108,7 +211,8 @@ export default function Home() {
           <div className="camera-badges"><span>REAL 3D</span><span>AR SCALE 1:1</span></div>
         </div> : <div className={`camera ${cameraOn?"camera-on":""}`}>
           {cameraOn?<video ref={videoRef} autoPlay playsInline muted/>:<div className="camera-placeholder"><span>◎</span><h3>Камера готова</h3><p>Встаньте так, чтобы было видно верхнюю часть тела</p></div>}
-          {cameraOn&&<div className="garment-overlay" style={{"--garment":catalog[active].color} as React.CSSProperties}><i/><span>{catalog[active].name}</span></div>}
+          {cameraOn&&<canvas ref={canvasRef} className="pose-canvas" aria-label="Одежда, синхронизированная с положением тела"/>}
+          {cameraOn&&<div className="tracking-state"><i/><span>{trackingStatus}</span></div>}
           <div className="camera-badges"><span>AI TRACKING</span><span>BODY MESH</span></div>
         </div>}
         <aside className="controls"><div><p className="control-label">Выбрано</p><h3>{catalog[active].name}</h3><span className="material-dot" style={{background:catalog[active].color}}/></div>
