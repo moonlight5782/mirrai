@@ -4,14 +4,14 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type Mode = "home" | "clothes" | "space";
 const clothes = [
-  { name: "Пиджак Nocturne", type: "Премиальная шерсть", price: "24 900 ₽", color: "#242321" },
-  { name: "Рубашка Air", type: "Мягкий хлопок", price: "9 600 ₽", color: "#d7dfdf" },
-  { name: "Куртка Form", type: "Матовый нейлон", price: "31 500 ₽", color: "#815d3c" },
-  { name: "Платье Line", type: "Шёлк", price: "28 400 ₽", color: "#762f3d" },
-  { name: "Худи Soft", type: "Плотный футер", price: "12 900 ₽", color: "#76756f" },
-  { name: "Тренч Rain", type: "Хлопок с пропиткой", price: "34 800 ₽", color: "#b49b72" },
-  { name: "Жилет Mono", type: "Костюмная шерсть", price: "16 500 ₽", color: "#39404a" },
-  { name: "Футболка Base", type: "Хлопок", price: "5 900 ₽", color: "#e9e5dc" },
+  { name: "Пиджак Nocturne", type: "Премиальная шерсть", price: "24 900 ₽", color: "#242321", shape: "jacket" },
+  { name: "Рубашка Air", type: "Мягкий хлопок", price: "9 600 ₽", color: "#d7dfdf", shape: "shirt" },
+  { name: "Куртка Form", type: "Матовый нейлон", price: "31 500 ₽", color: "#815d3c", shape: "jacket" },
+  { name: "Платье Line", type: "Шёлк", price: "28 400 ₽", color: "#762f3d", shape: "dress" },
+  { name: "Худи Soft", type: "Плотный футер", price: "12 900 ₽", color: "#76756f", shape: "hoodie" },
+  { name: "Тренч Rain", type: "Хлопок с пропиткой", price: "34 800 ₽", color: "#b49b72", shape: "trench" },
+  { name: "Жилет Mono", type: "Костюмная шерсть", price: "16 500 ₽", color: "#39404a", shape: "vest" },
+  { name: "Футболка Base", type: "Хлопок", price: "5 900 ₽", color: "#e9e5dc", shape: "tshirt" },
 ];
 const objects = [
   { name: "Кресло Cloud", type: "3D-модель · реальный масштаб", price: "67 000 ₽", color: "#d2bda8", model: "/chair.glb" },
@@ -41,6 +41,7 @@ export default function Home() {
   const poseRef = useRef<{ detectForVideo: (video: HTMLVideoElement, time: number) => { landmarks: Array<Array<{x:number;y:number;visibility?:number}>> }; close: () => void } | null>(null);
   const animationRef = useRef<number | null>(null);
   const smoothPoseRef = useRef<Array<{x:number;y:number}> | null>(null);
+  const garmentImageRef = useRef<HTMLImageElement | null>(null);
   const trackingStatusRef = useRef("");
   const arRef = useRef<HTMLElement & { activateAR?: () => Promise<void>; canActivateAR?: boolean }>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -56,6 +57,7 @@ export default function Home() {
     setCustomModel("");
     setUploadState("idle");
     setUploadMessage("");
+    garmentImageRef.current = null;
     if (mode === "space") setArStatus("Загружаем выбранную 3D-модель…");
   }
 
@@ -175,8 +177,16 @@ export default function Home() {
   function drawGarment(context: CanvasRenderingContext2D, pose: Array<{x:number;y:number}>, width: number) {
     const [leftShoulder,rightShoulder,leftElbow,rightElbow,leftHip,rightHip] = pose;
     const shoulderWidth = Math.hypot(rightShoulder.x-leftShoulder.x,rightShoulder.y-leftShoulder.y);
-    const padding = shoulderWidth * .16;
+    const sizeScale = ({XS:.9,S:.95,M:1,L:1.06,XL:1.12} as Record<string,number>)[size];
+    const padding = shoulderWidth * .16 * sizeScale;
     const sleeve = shoulderWidth * .24;
+    const garment = clothes[active];
+    const centerX = (leftShoulder.x + rightShoulder.x) / 2;
+    const hipY = (leftHip.y + rightHip.y) / 2;
+    const isSleeveless = garment.shape === "vest";
+    const isShortSleeve = garment.shape === "tshirt";
+    const hemDrop = garment.shape === "dress" ? shoulderWidth * .95 : garment.shape === "trench" ? shoulderWidth * .48 : padding;
+    const hemFlare = garment.shape === "dress" ? shoulderWidth * .42 : garment.shape === "trench" ? shoulderWidth * .12 : 0;
     context.save();
     const gradient = context.createLinearGradient(leftShoulder.x,leftShoulder.y,rightHip.x,rightHip.y);
     gradient.addColorStop(0, clothes[active].color);
@@ -186,16 +196,38 @@ export default function Home() {
     context.shadowColor = "#00000055"; context.shadowBlur = width * .012;
     context.beginPath();
     context.moveTo(leftShoulder.x-padding,leftShoulder.y-padding*.35);
-    context.lineTo(leftElbow.x-sleeve,leftElbow.y);
-    context.lineTo(leftElbow.x+sleeve*.25,leftElbow.y+sleeve*.35);
-    context.lineTo(leftHip.x-padding*.4,leftHip.y+padding);
-    context.lineTo(rightHip.x+padding*.4,rightHip.y+padding);
-    context.lineTo(rightElbow.x-sleeve*.25,rightElbow.y+sleeve*.35);
-    context.lineTo(rightElbow.x+sleeve,rightElbow.y);
+    if (!isSleeveless) {
+      const leftEnd = isShortSleeve ? {x:leftShoulder.x+(leftElbow.x-leftShoulder.x)*.42,y:leftShoulder.y+(leftElbow.y-leftShoulder.y)*.42} : leftElbow;
+      context.lineTo(leftEnd.x-sleeve,leftEnd.y);
+      context.lineTo(leftEnd.x+sleeve*.25,leftEnd.y+sleeve*.35);
+    }
+    context.lineTo(leftHip.x-padding*.4-hemFlare,leftHip.y+hemDrop);
+    context.lineTo(rightHip.x+padding*.4+hemFlare,rightHip.y+hemDrop);
+    if (!isSleeveless) {
+      const rightEnd = isShortSleeve ? {x:rightShoulder.x+(rightElbow.x-rightShoulder.x)*.42,y:rightShoulder.y+(rightElbow.y-rightShoulder.y)*.42} : rightElbow;
+      context.lineTo(rightEnd.x-sleeve*.25,rightEnd.y+sleeve*.35);
+      context.lineTo(rightEnd.x+sleeve,rightEnd.y);
+    }
     context.lineTo(rightShoulder.x+padding,rightShoulder.y-padding*.35);
-    context.quadraticCurveTo((leftShoulder.x+rightShoulder.x)/2,(leftShoulder.y+rightShoulder.y)/2+padding*1.1,leftShoulder.x-padding,leftShoulder.y-padding*.35);
+    const neckDepth = garment.shape === "hoodie" ? padding*.55 : garment.shape === "shirt" ? padding*1.25 : padding*.9;
+    context.quadraticCurveTo(centerX,(leftShoulder.y+rightShoulder.y)/2+neckDepth,leftShoulder.x-padding,leftShoulder.y-padding*.35);
     context.closePath(); context.fill();
+    const image = garmentImageRef.current;
+    if (image?.complete && image.naturalWidth) {
+      context.save(); context.clip(); context.globalAlpha=.72;
+      context.drawImage(image, centerX-shoulderWidth*.72, leftShoulder.y-padding, shoulderWidth*1.44, hipY-leftShoulder.y+hemDrop+padding);
+      context.restore();
+    }
     context.strokeStyle="#ffffff30"; context.lineWidth=Math.max(1,width*.002); context.stroke();
+    context.globalAlpha=.38; context.strokeStyle="#ffffff"; context.shadowBlur=0;
+    context.beginPath(); context.moveTo(centerX,(leftShoulder.y+rightShoulder.y)/2+neckDepth); context.lineTo(centerX,hipY+hemDrop*.78); context.stroke();
+    if (["jacket","trench"].includes(garment.shape)) {
+      context.fillStyle="#e8e3d888"; context.beginPath(); context.arc(centerX+shoulderWidth*.04,hipY-padding*.5,Math.max(2,width*.0035),0,Math.PI*2); context.fill();
+      context.beginPath(); context.arc(centerX+shoulderWidth*.04,hipY+padding*.2,Math.max(2,width*.0035),0,Math.PI*2); context.fill();
+    }
+    if (garment.shape === "hoodie") {
+      context.strokeStyle="#ffffff70"; context.lineWidth=Math.max(2,width*.004); context.beginPath(); context.arc(centerX,(leftShoulder.y+rightShoulder.y)/2-padding*.25,shoulderWidth*.27,Math.PI*.08,Math.PI*.92,true); context.stroke();
+    }
     context.restore();
   }
 
@@ -226,6 +258,11 @@ export default function Home() {
     if (!isImage) { setUploadState("error"); setUploadMessage("Поддерживаются JPG, PNG, WEBP, HEIC, GLB и GLTF"); return; }
     if (customPreview.startsWith("blob:")) URL.revokeObjectURL(customPreview);
     setCustomPreview(URL.createObjectURL(file));
+    if (mode === "clothes") {
+      const image = new Image(); image.onload = () => { garmentImageRef.current = image; setUploadMessage("Фото используется как текстура в автономной примерке"); }; image.src = URL.createObjectURL(file);
+      setUploadState("ready"); setUploadMessage("Подготавливаем фото для примерки…");
+      if (!reconstructionApi) return;
+    }
     if (!reconstructionApi) {
       setUploadState("error");
       setUploadMessage("Фото принято. Для генерации нужно подключить адрес вашего GPU-сервера.");
