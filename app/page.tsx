@@ -37,6 +37,8 @@ export default function Home() {
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [uploadMessage, setUploadMessage] = useState("");
   const [snapshotUrl, setSnapshotUrl] = useState("");
+  const [bodyRegion, setBodyRegion] = useState("Ищем человека");
+  const [photoPending, setPhotoPending] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poseRef = useRef<{ detectForVideo: (video: HTMLVideoElement, time: number) => { landmarks: Array<Array<{x:number;y:number;visibility?:number}>> }; close: () => void } | null>(null);
@@ -44,6 +46,7 @@ export default function Home() {
   const smoothPoseRef = useRef<Array<{x:number;y:number}> | null>(null);
   const garmentImageRef = useRef<HTMLImageElement | null>(null);
   const trackingStatusRef = useRef("");
+  const bodyRegionRef = useRef("");
   const arRef = useRef<HTMLElement & { activateAR?: () => Promise<void>; canActivateAR?: boolean }>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const catalog = mode === "space" ? objects : clothes;
@@ -60,6 +63,7 @@ export default function Home() {
     setCustomModel("");
     setUploadState("idle");
     setUploadMessage("");
+    setPhotoPending(false);
     garmentImageRef.current = null;
     if (mode === "space") setArStatus(sameReadyObject ? `${objects[index].name} ${objects[index].name.startsWith("Лампа") ? "готова" : "готов"} — вращайте или откройте AR` : "Загружаем выбранную 3D-модель…");
   }
@@ -68,6 +72,12 @@ export default function Home() {
     if (trackingStatusRef.current === value) return;
     trackingStatusRef.current = value;
     setTrackingStatus(value);
+  }
+
+  function updateBodyRegion(value: string) {
+    if (bodyRegionRef.current === value) return;
+    bodyRegionRef.current = value;
+    setBodyRegion(value);
   }
 
   async function startCamera() {
@@ -81,7 +91,7 @@ export default function Home() {
   function closeStudio() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null; setCameraOn(false); setMode("home");
-    setCustomName(""); setCustomPreview(""); setCustomModel(""); setUploadState("idle"); setUploadMessage(""); setSnapshotUrl(""); garmentImageRef.current = null;
+    setCustomName(""); setCustomPreview(""); setCustomModel(""); setUploadState("idle"); setUploadMessage(""); setSnapshotUrl(""); setPhotoPending(false); setBodyRegion("Ищем человека"); garmentImageRef.current = null;
   }
   async function retryCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -190,15 +200,27 @@ export default function Home() {
       const points = result.landmarks[0];
       const context = canvas.getContext("2d");
       context?.clearRect(0, 0, canvas.width, canvas.height);
-      if (points && context && [11,12,23,24].every(index => (points[index].visibility ?? 1) > .45)) {
-        const indexes = [11,12,13,14,23,24];
+      if (points && context) {
+        const visible = (indexes: number[]) => indexes.filter(index => (points[index]?.visibility ?? 0) > .45).length >= Math.ceil(indexes.length * .65);
+        const faceVisible = visible([0,2,5,7,8]);
+        const upperVisible = visible([11,12,13,14]);
+        const hipsVisible = visible([23,24]);
+        const legsVisible = visible([25,26,27,28]);
+        const region = upperVisible && hipsVisible && legsVisible ? "Полный рост" : upperVisible && hipsVisible ? "Верх тела" : hipsVisible && legsVisible ? "Нижняя часть тела" : faceVisible ? "Лицо и плечи" : "Человек частично в кадре";
+        updateBodyRegion(region);
+        if (!(upperVisible && hipsVisible)) {
+          updateTrackingStatus(region === "Нижняя часть тела" ? "Поднимите камеру — для этой одежды нужны плечи" : "Покажите плечи и корпус полностью");
+          animationRef.current = requestAnimationFrame(runPoseLoop);
+          return;
+        }
+        const indexes = [11,12,13,14,23,24,25,26];
         const raw = indexes.map(index => ({ x: points[index].x * canvas.width, y: points[index].y * canvas.height }));
         const previous = smoothPoseRef.current;
         const smooth = raw.map((point,index) => previous ? ({ x: previous[index].x * .72 + point.x * .28, y: previous[index].y * .72 + point.y * .28 }) : point);
         smoothPoseRef.current = smooth;
         drawGarment(context, smooth, canvas.width);
-        updateTrackingStatus("Тело отслеживается · LIVE");
-      } else updateTrackingStatus("Покажите плечи и корпус полностью");
+        updateTrackingStatus(`${region} отслеживается · LIVE`);
+      } else { updateBodyRegion("Человек не найден"); updateTrackingStatus("Встаньте перед камерой"); }
     }
     animationRef.current = requestAnimationFrame(runPoseLoop);
   }
@@ -261,6 +283,7 @@ export default function Home() {
   }
 
   async function openAR() {
+    if (photoPending) { setArStatus("Сначала дождитесь готовой 3D-модели"); return; }
     setArStatus("Запускаем системный AR…");
     try {
       await arRef.current?.activateAR?.();
@@ -295,6 +318,7 @@ export default function Home() {
       }
       if (customModel.startsWith("blob:")) URL.revokeObjectURL(customModel);
       setCustomModel(URL.createObjectURL(file));
+      setPhotoPending(false);
       setUploadState("ready");
       setUploadMessage("3D-модель распознана и готова");
       setArStatus("Ваша модель готова — откройте AR");
@@ -308,6 +332,7 @@ export default function Home() {
       setUploadState("ready"); setUploadMessage("Подготавливаем фото для примерки…");
       if (!reconstructionApi) return;
     }
+    if (mode === "space") setPhotoPending(true);
     if (!reconstructionApi) {
       setUploadState("error");
       setUploadMessage("Фото принято. Для генерации нужно подключить адрес вашего GPU-сервера.");
@@ -327,6 +352,7 @@ export default function Home() {
         const job = await statusResponse.json() as { status: string; model_url?: string; error?: string };
         if (job.status === "ready" && job.model_url) {
           setCustomModel(new URL(job.model_url, reconstructionApi).toString());
+          setPhotoPending(false);
           setUploadState("ready"); setUploadMessage("3D-модель готова"); setArStatus("Ваша модель готова — откройте AR"); return;
         }
         if (job.status === "failed") throw new Error(job.error || "generation");
@@ -386,17 +412,18 @@ export default function Home() {
             "field-of-view": "32deg",
           }, React.createElement("button", { slot: "ar-button", className: "native-ar-button" }, "Разместить у себя", React.createElement("span", null, "↗")))}
           <div className="ar-room"><i className="ar-floor"/><i className="ar-window"/><span>Проведите пальцем, чтобы осмотреть предмет со всех сторон</span></div>
+          {photoPending && <div className="reconstruction-screen">{customPreview && <img src={customPreview} alt="Фотография предмета для 3D-реконструкции"/>}<p>Создание 3D-модели</p><div className="generation-steps"><span className="done">Фото принято</span><span className={uploadState === "generating" ? "active" : ""}>Геометрия</span><span>Текстуры</span><span>GLB для AR</span></div><small>{uploadMessage}</small></div>}
           <div className="camera-badges"><span>REAL 3D</span><span>AR SCALE 1:1</span></div>
         </div> : <div className={`camera ${cameraOn?"camera-on":""}`}>
           {cameraOn?<video ref={videoRef} autoPlay playsInline muted onCanPlay={(event)=>event.currentTarget.play().catch(()=>undefined)}/>:<div className="camera-placeholder"><span>◎</span><h3>Камера готова</h3><p>Встаньте так, чтобы было видно верхнюю часть тела</p></div>}
           {cameraOn&&<canvas ref={canvasRef} className="pose-canvas" aria-label="Одежда, синхронизированная с положением тела"/>}
           {cameraOn&&<div className="tracking-state"><i/><span>{trackingStatus}</span></div>}
-          <div className="camera-badges"><span>AI TRACKING</span><span>BODY POSE</span></div>
+          <div className="camera-badges"><span>AI TRACKING</span><span>{cameraOn ? bodyRegion.toUpperCase() : "AUTO BODY ZONE"}</span></div>
         </div>}
         <aside className="controls"><div><p className="control-label">Выбрано</p><h3>{customName || catalog[active].name}</h3><span className="material-dot" style={{background:catalog[active].color}}/></div>
           {!isWidget && <div className="asset-upload"><p className="control-label">Свой товар</p><label className="upload-button"><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,.glb" onChange={event => handleAsset(event.target.files?.[0])}/><span>＋</span><b>{mode === "clothes" ? "Фото одежды" : "Фото или GLB-модель"}</b></label>{customPreview && <img className="upload-preview" src={customPreview} alt="Загруженный товар"/>}{uploadState !== "idle" && <div className={`asset-result ${uploadState}`}><span>{uploadState === "ready" ? "✓" : uploadState === "error" ? "!" : "•••"}</span><div><strong>{customName}</strong><small>{uploadMessage}</small></div></div>}</div>}
           {mode==="clothes"?<div><p className="control-label">Размер</p><div className="sizes">{["XS","S","M","L","XL"].map(s=><button className={size===s?"active":""} onClick={()=>setSize(s)} key={s}>{s}</button>)}</div><p className="fit-note">Выбран размер <strong>{size}</strong> · ручная настройка</p></div>:<div><p className="control-label">Настоящий AR</p><div className="ar-features"><span>Поверхности</span><span>Окклюзия</span><span>Масштаб 1:1</span><span>Тени</span></div><p className="fit-note ar-state">{arStatus}</p></div>}
-          {mode === "space" ? <button className="primary" onClick={openAR}>Открыть системный AR <span>↗</span></button> : !cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:cameraError?<button className="primary" onClick={retryCamera}>Повторить запуск <span>↻</span></button>:<button className="primary" onClick={takeSnapshot}>Сделать снимок <span>→</span></button>}
+          {mode === "space" ? <button className="primary" onClick={openAR} disabled={photoPending}>{photoPending ? "Ожидаем 3D-модель" : "Открыть системный AR"} <span>↗</span></button> : !cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:cameraError?<button className="primary" onClick={retryCamera}>Повторить запуск <span>↻</span></button>:<button className="primary" onClick={takeSnapshot}>Сделать снимок <span>→</span></button>}
           {snapshotUrl && <div className="snapshot-card"><img src={snapshotUrl} alt="Снимок виртуальной примерки"/><div><strong>Образ сохранён</strong><a href={snapshotUrl} download="mirrai-look.jpg">Скачать снимок</a></div></div>}
           {cameraError&&<p className="error">{cameraError}</p>}<p className="privacy">Кадры обрабатываются на вашем устройстве и не сохраняются.</p>
         </aside>

@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import os
+import sqlite3
 import uuid
 from pathlib import Path
 
@@ -19,11 +20,28 @@ ORIGINS = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "http://localhost:300
 
 app = FastAPI(title="MIRRAI reconstruction gateway", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=ORIGINS, allow_methods=["GET", "POST"], allow_headers=["*"])
-jobs: dict[str, dict] = {}
+DB_PATH = ROOT / "jobs.sqlite3"
+
+
+def connect_db():
+    connection = sqlite3.connect(DB_PATH)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def update_job(job_id: str, **values):
+    fields = ", ".join(f"{key} = ?" for key in values)
+    with connect_db() as connection:
+        connection.execute(f"UPDATE jobs SET {fields}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [*values.values(), job_id])
+
+
+with connect_db() as connection:
+    connection.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, status TEXT NOT NULL, kind TEXT NOT NULL, model_url TEXT, error TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+    connection.execute("UPDATE jobs SET status = 'failed', error = 'Service restarted during generation' WHERE status IN ('queued', 'generating')")
 
 
 async def generate(job_id: str, source: Path) -> None:
-    jobs[job_id]["status"] = "generating"
+    update_job(job_id, status="generating", error=None)
     try:
         mime = "jpeg" if source.suffix.lower() in {".jpg", ".jpeg"} else source.suffix.lstrip(".")
         encoded = base64.b64encode(source.read_bytes()).decode("ascii")
@@ -42,13 +60,13 @@ async def generate(job_id: str, source: Path) -> None:
                 if status.get("status") == "completed":
                     target = OUTPUTS / f"{job_id}.glb"
                     target.write_bytes(base64.b64decode(status["model_base64"]))
-                    jobs[job_id].update(status="ready", model_url=f"/v1/models/{job_id}.glb")
+                    update_job(job_id, status="ready", model_url=f"/v1/models/{job_id}.glb")
                     return
                 if status.get("status") in {"failed", "error"}:
                     raise RuntimeError(status.get("error", "Hunyuan generation failed"))
             raise TimeoutError("Generation timed out")
     except Exception as error:
-        jobs[job_id].update(status="failed", error=str(error)[:300])
+        update_job(job_id, status="failed", error=str(error)[:300])
 
 
 @app.get("/health")
@@ -67,16 +85,19 @@ async def create_asset(background: BackgroundTasks, file: UploadFile = File(...)
     job_id = uuid.uuid4().hex
     source = INPUTS / f"{job_id}{suffix}"
     source.write_bytes(payload)
-    jobs[job_id] = {"id": job_id, "status": "queued", "kind": kind}
+    with connect_db() as connection:
+        connection.execute("INSERT INTO jobs (id, status, kind) VALUES (?, 'queued', ?)", (job_id, kind))
     background.add_task(generate, job_id, source)
-    return jobs[job_id]
+    return {"id": job_id, "status": "queued", "kind": kind}
 
 
 @app.get("/v1/assets/{job_id}")
 async def get_asset(job_id: str):
-    if job_id not in jobs:
+    with connect_db() as connection:
+        row = connection.execute("SELECT id, status, kind, model_url, error, created_at, updated_at FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    if row is None:
         raise HTTPException(404, "Unknown asset")
-    return jobs[job_id]
+    return dict(row)
 
 
 @app.get("/v1/models/{filename}")
