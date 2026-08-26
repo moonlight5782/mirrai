@@ -14,10 +14,10 @@ const clothes = [
   { name: "Футболка Base", type: "Хлопок", price: "5 900 ₽", color: "#e9e5dc" },
 ];
 const objects = [
-  { name: "Кресло Cloud", type: "3D-модель · реальный масштаб", price: "67 000 ₽", color: "#d2bda8" },
-  { name: "Стул Arc", type: "Дерево и ткань", price: "29 000 ₽", color: "#92765c" },
-  { name: "Лампа Halo", type: "Металл", price: "18 400 ₽", color: "#d0be85" },
-  { name: "Стол Plane", type: "Натуральный дуб", price: "74 000 ₽", color: "#aa8763" },
+  { name: "Кресло Cloud", type: "3D-модель · реальный масштаб", price: "67 000 ₽", color: "#d2bda8", model: "/chair.glb" },
+  { name: "Стул Arc", type: "Дерево и ткань", price: "29 000 ₽", color: "#92765c", model: "/catalog/arc-chair.glb" },
+  { name: "Лампа Halo", type: "Металл", price: "18 400 ₽", color: "#d0be85", model: "/catalog/halo-lamp.glb" },
+  { name: "Стол Plane", type: "Натуральный дуб", price: "74 000 ₽", color: "#aa8763", model: "/catalog/plane-table.glb" },
 ];
 
 type UploadState = "idle" | "uploading" | "generating" | "ready" | "error";
@@ -46,7 +46,18 @@ export default function Home() {
   const streamRef = useRef<MediaStream | null>(null);
   const catalog = mode === "space" ? objects : clothes;
   const isWidget = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("widget") === "1", []);
-  const modelSource = customModel || "/chair.glb";
+  const modelSource = customModel || (mode === "space" ? objects[active]?.model : "/chair.glb");
+
+  function selectCatalogItem(index: number) {
+    setActive(index);
+    setCustomName("");
+    setCustomPreview("");
+    if (customModel.startsWith("blob:")) URL.revokeObjectURL(customModel);
+    setCustomModel("");
+    setUploadState("idle");
+    setUploadMessage("");
+    if (mode === "space") setArStatus("Загружаем выбранную 3D-модель…");
+  }
 
   function updateTrackingStatus(value: string) {
     if (trackingStatusRef.current === value) return;
@@ -272,9 +283,10 @@ export default function Home() {
     </> : <section className="studio shell">
       <header className="studio-head"><div><button className="back" onClick={closeStudio}>← Назад</button><p>{mode === "clothes" ? "Виртуальная примерочная" : "AR-пространство"}</p><h1>{mode === "clothes" ? "Ваш образ — в движении" : "Посмотрите предмет у себя"}</h1></div><div className="live-pill"><i /> LIVE · {cameraOn ? "30 FPS" : "ГОТОВО"}</div></header>
       <div className="studio-grid">
-        <aside className="catalog"><div className="catalog-title"><span>Коллекция</span><small>{catalog.length} {catalog.length === 1 ? "предмет" : "предмета"}</small></div>{catalog.map((item,index)=><button key={item.name} className={`product ${active===index?"active":""}`} onClick={()=>setActive(index)}><i style={{background:item.color}}><b>{mode === "space" ? "▰" : "♢"}</b></i><span><strong>{item.name}</strong><small>{item.type}</small><em>{item.price}</em></span><b className="select-mark">{active===index?"✓":"+"}</b></button>)}</aside>
+        <aside className="catalog"><div className="catalog-title"><span>Коллекция</span><small>{catalog.length} {catalog.length === 1 ? "предмет" : "предмета"}</small></div>{catalog.map((item,index)=><button key={item.name} className={`product ${active===index&&!customName?"active":""}`} onClick={()=>selectCatalogItem(index)}><i style={{background:item.color}}><b>{mode === "space" ? "▰" : "♢"}</b></i><span><strong>{item.name}</strong><small>{item.type}</small><em>{item.price}</em></span><b className="select-mark">{active===index&&!customName?"✓":"+"}</b></button>)}</aside>
         {mode === "space" ? <div className="ar-stage">
           {React.createElement("model-viewer", {
+            key: modelSource,
             ref: arRef,
             src: modelSource,
             alt: "Объёмная 3D-модель кресла Cloud",
@@ -291,9 +303,9 @@ export default function Home() {
             "camera-orbit": "35deg 72deg 2.7m",
             "min-camera-orbit": "auto auto 1.5m",
             "max-camera-orbit": "auto auto 5m",
-            onLoad: () => setArStatus("Модель готова — вращайте её или откройте AR"),
+            onLoad: () => setArStatus(`${customName || objects[active].name} готов — вращайте или откройте AR`),
             onError: () => setArStatus("Не удалось загрузить 3D-модель"),
-            onArStatus: (event: CustomEvent<{status: string}>) => setArStatus(event.detail.status === "object-placed" ? "Кресло размещено в пространстве" : event.detail.status === "failed" ? "AR не запустился — используйте Safari на iPhone или Chrome на Android" : "Ищем поверхность…"),
+            onArStatus: (event: CustomEvent<{status: string}>) => setArStatus(event.detail.status === "object-placed" ? `${customName || objects[active].name} размещён в пространстве` : event.detail.status === "failed" ? "AR не запустился — используйте Safari на iPhone или Chrome на Android" : "Ищем поверхность…"),
           }, React.createElement("button", { slot: "ar-button", className: "native-ar-button" }, "Разместить у себя", React.createElement("span", null, "↗")))}
           <div className="ar-room"><i className="ar-floor"/><i className="ar-window"/><span>Проведите пальцем, чтобы осмотреть кресло со всех сторон</span></div>
           <div className="camera-badges"><span>REAL 3D</span><span>AR SCALE 1:1</span></div>
