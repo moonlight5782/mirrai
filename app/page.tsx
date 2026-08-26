@@ -36,6 +36,7 @@ export default function Home() {
   const [customModel, setCustomModel] = useState("");
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [uploadMessage, setUploadMessage] = useState("");
+  const [snapshotUrl, setSnapshotUrl] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poseRef = useRef<{ detectForVideo: (video: HTMLVideoElement, time: number) => { landmarks: Array<Array<{x:number;y:number;visibility?:number}>> }; close: () => void } | null>(null);
@@ -48,8 +49,10 @@ export default function Home() {
   const catalog = mode === "space" ? objects : clothes;
   const isWidget = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("widget") === "1", []);
   const modelSource = customModel || (mode === "space" ? objects[active]?.model : "/chair.glb");
+  const catalogCountLabel = `${catalog.length} ${catalog.length === 1 ? "предмет" : catalog.length < 5 ? "предмета" : "предметов"}`;
 
   function selectCatalogItem(index: number) {
+    const sameReadyObject = mode === "space" && index === active && !customName;
     setActive(index);
     setCustomName("");
     setCustomPreview("");
@@ -58,7 +61,7 @@ export default function Home() {
     setUploadState("idle");
     setUploadMessage("");
     garmentImageRef.current = null;
-    if (mode === "space") setArStatus("Загружаем выбранную 3D-модель…");
+    if (mode === "space") setArStatus(sameReadyObject ? `${objects[index].name} ${objects[index].name.startsWith("Лампа") ? "готова" : "готов"} — вращайте или откройте AR` : "Загружаем выбранную 3D-модель…");
   }
 
   function updateTrackingStatus(value: string) {
@@ -78,6 +81,7 @@ export default function Home() {
   function closeStudio() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null; setCameraOn(false); setMode("home");
+    setCustomName(""); setCustomPreview(""); setCustomModel(""); setUploadState("idle"); setUploadMessage(""); setSnapshotUrl(""); garmentImageRef.current = null;
   }
   async function retryCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -94,6 +98,31 @@ export default function Home() {
       poseRef.current?.close();
     };
   }, []);
+
+  useEffect(() => {
+    if (mode !== "space" || !arRef.current) return;
+    const viewer = arRef.current;
+    const productName = customName || objects[active].name;
+    const readyWord = productName.startsWith("Лампа") ? "готова" : "готов";
+    const placedWord = productName.startsWith("Лампа") ? "размещена" : "размещён";
+    const onLoad = () => setArStatus(`${productName} ${readyWord} — вращайте или откройте AR`);
+    const onError = () => setArStatus("Не удалось загрузить 3D-модель");
+    const onArStatus = (event: Event) => {
+      const status = (event as CustomEvent<{status: string}>).detail?.status;
+      setArStatus(status === "object-placed" ? `${productName} ${placedWord} в пространстве` : status === "failed" ? "AR не запустился — используйте Safari на iPhone или Chrome на Android" : "Ищем поверхность…");
+    };
+    viewer.addEventListener("load", onLoad);
+    viewer.addEventListener("error", onError);
+    viewer.addEventListener("ar-status", onArStatus);
+    (viewer as HTMLElement & { src?: string }).src = modelSource;
+    viewer.setAttribute("src", modelSource);
+    viewer.setAttribute("alt", `Объёмная 3D-модель ${productName}`);
+    return () => {
+      viewer.removeEventListener("load", onLoad);
+      viewer.removeEventListener("error", onError);
+      viewer.removeEventListener("ar-status", onArStatus);
+    };
+  }, [mode, active, modelSource, customName]);
 
   useEffect(() => {
     if (!cameraOn || !streamRef.current || !videoRef.current) return;
@@ -240,14 +269,30 @@ export default function Home() {
     }
   }
 
+  function takeSnapshot() {
+    const video = videoRef.current;
+    const overlay = canvasRef.current;
+    if (!video || !overlay || !video.videoWidth) return;
+    const result = document.createElement("canvas");
+    result.width = video.videoWidth; result.height = video.videoHeight;
+    const context = result.getContext("2d"); if (!context) return;
+    context.translate(result.width, 0); context.scale(-1, 1); context.drawImage(video, 0, 0, result.width, result.height); context.drawImage(overlay, 0, 0, result.width, result.height); context.setTransform(1,0,0,1,0,0);
+    setSnapshotUrl(result.toDataURL("image/jpeg", .9));
+  }
+
   async function handleAsset(file?: File) {
     if (!file) return;
     const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
     const isImage = file.type.startsWith("image/") || ["jpg","jpeg","png","webp","heic"].includes(extension);
-    const isModel = ["glb","gltf"].includes(extension) || file.type === "model/gltf-binary";
+    const isModel = extension === "glb" || file.type === "model/gltf-binary";
     setCustomName(file.name);
     setUploadMessage("");
     if (isModel) {
+      if (mode === "clothes") {
+        setUploadState("error");
+        setUploadMessage("GLB распознан. Для движения одежды нужен серверный риггинг; для автономной примерки загрузите фото.");
+        return;
+      }
       if (customModel.startsWith("blob:")) URL.revokeObjectURL(customModel);
       setCustomModel(URL.createObjectURL(file));
       setUploadState("ready");
@@ -255,7 +300,7 @@ export default function Home() {
       setArStatus("Ваша модель готова — откройте AR");
       return;
     }
-    if (!isImage) { setUploadState("error"); setUploadMessage("Поддерживаются JPG, PNG, WEBP, HEIC, GLB и GLTF"); return; }
+    if (!isImage) { setUploadState("error"); setUploadMessage("Поддерживаются JPG, PNG, WEBP, HEIC и автономный GLB"); return; }
     if (customPreview.startsWith("blob:")) URL.revokeObjectURL(customPreview);
     setCustomPreview(URL.createObjectURL(file));
     if (mode === "clothes") {
@@ -317,16 +362,16 @@ export default function Home() {
         <p className="section-label">Один взгляд вместо сомнений</p><h2>Выбирайте не по воображению.<br /><em>Выбирайте глазами.</em></h2>
         <div className="steps"><article><span>01</span><h3>Выберите</h3><p>Одежду или предмет из коллекции</p></article><article><span>02</span><h3>Откройте камеру</h3><p>Ничего скачивать не нужно</p></article><article><span>03</span><h3>Посмотрите</h3><p>Результат появляется в реальном времени</p></article></div>
       </section>
+      <section className="technology shell" id="technology"><p className="section-label">Технология MIRRAI</p><div><h2>Работает сейчас.<br/><em>Становится точнее с сервером.</em></h2><p>На устройстве уже работают отслеживание тела, разные силуэты одежды и системный AR для предметов. Собственный GPU-сервер добавит генерацию текстурированной 3D-модели из фотографии и физическую посадку ткани.</p></div><div className="tech-grid"><span><b>01</b> Body tracking<br/><small>Локально, без отправки видео</small></span><span><b>02</b> Native AR<br/><small>Реальный масштаб и поверхности</small></span><span><b>03</b> GPU reconstruction<br/><small>Подключаемый собственный сервер</small></span></div></section>
     </> : <section className="studio shell">
       <header className="studio-head"><div><button className="back" onClick={closeStudio}>← Назад</button><p>{mode === "clothes" ? "Виртуальная примерочная" : "AR-пространство"}</p><h1>{mode === "clothes" ? "Ваш образ — в движении" : "Посмотрите предмет у себя"}</h1></div><div className="live-pill"><i /> LIVE · {cameraOn ? "30 FPS" : "ГОТОВО"}</div></header>
       <div className="studio-grid">
-        <aside className="catalog"><div className="catalog-title"><span>Коллекция</span><small>{catalog.length} {catalog.length === 1 ? "предмет" : "предмета"}</small></div>{catalog.map((item,index)=><button key={item.name} className={`product ${active===index&&!customName?"active":""}`} onClick={()=>selectCatalogItem(index)}><i style={{background:item.color}}><b>{mode === "space" ? "▰" : "♢"}</b></i><span><strong>{item.name}</strong><small>{item.type}</small><em>{item.price}</em></span><b className="select-mark">{active===index&&!customName?"✓":"+"}</b></button>)}</aside>
+        <aside className="catalog"><div className="catalog-title"><span>Коллекция</span><small>{catalogCountLabel}</small></div>{catalog.map((item,index)=><button key={item.name} className={`product ${active===index&&!customName?"active":""}`} onClick={()=>selectCatalogItem(index)}><i style={{background:item.color}}><b>{mode === "space" ? "▰" : "♢"}</b></i><span><strong>{item.name}</strong><small>{item.type}</small><em>{item.price}</em></span><b className="select-mark">{active===index&&!customName?"✓":"+"}</b></button>)}</aside>
         {mode === "space" ? <div className="ar-stage">
           {React.createElement("model-viewer", {
-            key: modelSource,
             ref: arRef,
             src: modelSource,
-            alt: "Объёмная 3D-модель кресла Cloud",
+            alt: `Объёмная 3D-модель ${customName || objects[active].name}`,
             ar: true,
             "ar-modes": "webxr scene-viewer quick-look",
             "ar-placement": "floor",
@@ -337,25 +382,22 @@ export default function Home() {
             "shadow-softness": "0.8",
             exposure: "1",
             "environment-image": "neutral",
-            "camera-orbit": "35deg 72deg 2.7m",
-            "min-camera-orbit": "auto auto 1.5m",
-            "max-camera-orbit": "auto auto 5m",
-            onLoad: () => setArStatus(`${customName || objects[active].name} готов — вращайте или откройте AR`),
-            onError: () => setArStatus("Не удалось загрузить 3D-модель"),
-            onArStatus: (event: CustomEvent<{status: string}>) => setArStatus(event.detail.status === "object-placed" ? `${customName || objects[active].name} размещён в пространстве` : event.detail.status === "failed" ? "AR не запустился — используйте Safari на iPhone или Chrome на Android" : "Ищем поверхность…"),
+            "camera-target": "auto auto auto",
+            "field-of-view": "32deg",
           }, React.createElement("button", { slot: "ar-button", className: "native-ar-button" }, "Разместить у себя", React.createElement("span", null, "↗")))}
-          <div className="ar-room"><i className="ar-floor"/><i className="ar-window"/><span>Проведите пальцем, чтобы осмотреть кресло со всех сторон</span></div>
+          <div className="ar-room"><i className="ar-floor"/><i className="ar-window"/><span>Проведите пальцем, чтобы осмотреть предмет со всех сторон</span></div>
           <div className="camera-badges"><span>REAL 3D</span><span>AR SCALE 1:1</span></div>
         </div> : <div className={`camera ${cameraOn?"camera-on":""}`}>
           {cameraOn?<video ref={videoRef} autoPlay playsInline muted onCanPlay={(event)=>event.currentTarget.play().catch(()=>undefined)}/>:<div className="camera-placeholder"><span>◎</span><h3>Камера готова</h3><p>Встаньте так, чтобы было видно верхнюю часть тела</p></div>}
           {cameraOn&&<canvas ref={canvasRef} className="pose-canvas" aria-label="Одежда, синхронизированная с положением тела"/>}
           {cameraOn&&<div className="tracking-state"><i/><span>{trackingStatus}</span></div>}
-          <div className="camera-badges"><span>AI TRACKING</span><span>BODY MESH</span></div>
+          <div className="camera-badges"><span>AI TRACKING</span><span>BODY POSE</span></div>
         </div>}
         <aside className="controls"><div><p className="control-label">Выбрано</p><h3>{customName || catalog[active].name}</h3><span className="material-dot" style={{background:catalog[active].color}}/></div>
-          {!isWidget && <div className="asset-upload"><p className="control-label">Свой товар</p><label className="upload-button"><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,.glb,.gltf" onChange={event => handleAsset(event.target.files?.[0])}/><span>＋</span><b>Фото или 3D-модель</b></label>{customPreview && <img className="upload-preview" src={customPreview} alt="Загруженный товар"/>}{uploadState !== "idle" && <div className={`asset-result ${uploadState}`}><span>{uploadState === "ready" ? "✓" : uploadState === "error" ? "!" : "•••"}</span><div><strong>{customName}</strong><small>{uploadMessage}</small></div></div>}</div>}
-          {mode==="clothes"?<div><p className="control-label">Размер</p><div className="sizes">{["XS","S","M","L","XL"].map(s=><button className={size===s?"active":""} onClick={()=>setSize(s)} key={s}>{s}</button>)}</div><p className="fit-note">Рекомендуем <strong>M</strong> по вашей калибровке</p></div>:<div><p className="control-label">Настоящий AR</p><div className="ar-features"><span>Поверхности</span><span>Окклюзия</span><span>Масштаб 1:1</span><span>Тени</span></div><p className="fit-note ar-state">{arStatus}</p></div>}
-          {mode === "space" ? <button className="primary" onClick={openAR}>Открыть системный AR <span>↗</span></button> : !cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:cameraError?<button className="primary" onClick={retryCamera}>Повторить запуск <span>↻</span></button>:<button className="primary">Сделать снимок <span>→</span></button>}
+          {!isWidget && <div className="asset-upload"><p className="control-label">Свой товар</p><label className="upload-button"><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,.glb" onChange={event => handleAsset(event.target.files?.[0])}/><span>＋</span><b>{mode === "clothes" ? "Фото одежды" : "Фото или GLB-модель"}</b></label>{customPreview && <img className="upload-preview" src={customPreview} alt="Загруженный товар"/>}{uploadState !== "idle" && <div className={`asset-result ${uploadState}`}><span>{uploadState === "ready" ? "✓" : uploadState === "error" ? "!" : "•••"}</span><div><strong>{customName}</strong><small>{uploadMessage}</small></div></div>}</div>}
+          {mode==="clothes"?<div><p className="control-label">Размер</p><div className="sizes">{["XS","S","M","L","XL"].map(s=><button className={size===s?"active":""} onClick={()=>setSize(s)} key={s}>{s}</button>)}</div><p className="fit-note">Выбран размер <strong>{size}</strong> · ручная настройка</p></div>:<div><p className="control-label">Настоящий AR</p><div className="ar-features"><span>Поверхности</span><span>Окклюзия</span><span>Масштаб 1:1</span><span>Тени</span></div><p className="fit-note ar-state">{arStatus}</p></div>}
+          {mode === "space" ? <button className="primary" onClick={openAR}>Открыть системный AR <span>↗</span></button> : !cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:cameraError?<button className="primary" onClick={retryCamera}>Повторить запуск <span>↻</span></button>:<button className="primary" onClick={takeSnapshot}>Сделать снимок <span>→</span></button>}
+          {snapshotUrl && <div className="snapshot-card"><img src={snapshotUrl} alt="Снимок виртуальной примерки"/><div><strong>Образ сохранён</strong><a href={snapshotUrl} download="mirrai-look.jpg">Скачать снимок</a></div></div>}
           {cameraError&&<p className="error">{cameraError}</p>}<p className="privacy">Кадры обрабатываются на вашем устройстве и не сохраняются.</p>
         </aside>
       </div>
