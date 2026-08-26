@@ -1,16 +1,27 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type Mode = "home" | "clothes" | "space";
 const clothes = [
   { name: "Пиджак Nocturne", type: "Премиальная шерсть", price: "24 900 ₽", color: "#242321" },
   { name: "Рубашка Air", type: "Мягкий хлопок", price: "9 600 ₽", color: "#d7dfdf" },
   { name: "Куртка Form", type: "Матовый нейлон", price: "31 500 ₽", color: "#815d3c" },
+  { name: "Платье Line", type: "Шёлк", price: "28 400 ₽", color: "#762f3d" },
+  { name: "Худи Soft", type: "Плотный футер", price: "12 900 ₽", color: "#76756f" },
+  { name: "Тренч Rain", type: "Хлопок с пропиткой", price: "34 800 ₽", color: "#b49b72" },
+  { name: "Жилет Mono", type: "Костюмная шерсть", price: "16 500 ₽", color: "#39404a" },
+  { name: "Футболка Base", type: "Хлопок", price: "5 900 ₽", color: "#e9e5dc" },
 ];
 const objects = [
   { name: "Кресло Cloud", type: "3D-модель · реальный масштаб", price: "67 000 ₽", color: "#d2bda8" },
+  { name: "Стул Arc", type: "Дерево и ткань", price: "29 000 ₽", color: "#92765c" },
+  { name: "Лампа Halo", type: "Металл", price: "18 400 ₽", color: "#d0be85" },
+  { name: "Стол Plane", type: "Натуральный дуб", price: "74 000 ₽", color: "#aa8763" },
 ];
+
+type UploadState = "idle" | "uploading" | "generating" | "ready" | "error";
+const reconstructionApi = process.env.NEXT_PUBLIC_RECONSTRUCTION_API_URL ?? "";
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("home");
@@ -20,6 +31,11 @@ export default function Home() {
   const [trackingStatus, setTrackingStatus] = useState("Модель тела готовится…");
   const [size, setSize] = useState("M");
   const [arStatus, setArStatus] = useState("3D-модель загружена");
+  const [customName, setCustomName] = useState("");
+  const [customPreview, setCustomPreview] = useState("");
+  const [customModel, setCustomModel] = useState("");
+  const [uploadState, setUploadState] = useState<UploadState>("idle");
+  const [uploadMessage, setUploadMessage] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poseRef = useRef<{ detectForVideo: (video: HTMLVideoElement, time: number) => { landmarks: Array<Array<{x:number;y:number;visibility?:number}>> }; close: () => void } | null>(null);
@@ -29,6 +45,8 @@ export default function Home() {
   const arRef = useRef<HTMLElement & { activateAR?: () => Promise<void>; canActivateAR?: boolean }>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const catalog = mode === "space" ? objects : clothes;
+  const isWidget = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("widget") === "1", []);
+  const modelSource = customModel || "/chair.glb";
 
   function updateTrackingStatus(value: string) {
     if (trackingStatusRef.current === value) return;
@@ -179,6 +197,51 @@ export default function Home() {
     }
   }
 
+  async function handleAsset(file?: File) {
+    if (!file) return;
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const isImage = file.type.startsWith("image/") || ["jpg","jpeg","png","webp","heic"].includes(extension);
+    const isModel = ["glb","gltf"].includes(extension) || file.type === "model/gltf-binary";
+    setCustomName(file.name);
+    setUploadMessage("");
+    if (isModel) {
+      if (customModel.startsWith("blob:")) URL.revokeObjectURL(customModel);
+      setCustomModel(URL.createObjectURL(file));
+      setUploadState("ready");
+      setUploadMessage("3D-модель распознана и готова");
+      setArStatus("Ваша модель готова — откройте AR");
+      return;
+    }
+    if (!isImage) { setUploadState("error"); setUploadMessage("Поддерживаются JPG, PNG, WEBP, HEIC, GLB и GLTF"); return; }
+    if (customPreview.startsWith("blob:")) URL.revokeObjectURL(customPreview);
+    setCustomPreview(URL.createObjectURL(file));
+    if (!reconstructionApi) {
+      setUploadState("error");
+      setUploadMessage("Фото принято. Для генерации нужно подключить адрес вашего GPU-сервера.");
+      return;
+    }
+    try {
+      setUploadState("uploading"); setUploadMessage("Загружаем фотографию…");
+      const body = new FormData(); body.append("file", file); body.append("kind", mode === "space" ? "object" : "garment");
+      const response = await fetch(`${reconstructionApi}/v1/assets`, { method: "POST", body });
+      if (!response.ok) throw new Error("upload");
+      const { id } = await response.json() as { id: string };
+      setUploadState("generating"); setUploadMessage("Создаём объём, геометрию и текстуры…");
+      for (let attempt = 0; attempt < 120; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        const statusResponse = await fetch(`${reconstructionApi}/v1/assets/${id}`);
+        if (!statusResponse.ok) throw new Error("status");
+        const job = await statusResponse.json() as { status: string; model_url?: string; error?: string };
+        if (job.status === "ready" && job.model_url) {
+          setCustomModel(new URL(job.model_url, reconstructionApi).toString());
+          setUploadState("ready"); setUploadMessage("3D-модель готова"); setArStatus("Ваша модель готова — откройте AR"); return;
+        }
+        if (job.status === "failed") throw new Error(job.error || "generation");
+      }
+      throw new Error("timeout");
+    } catch { setUploadState("error"); setUploadMessage("Генерация не завершилась. Проверьте GPU-сервис и повторите."); }
+  }
+
   return <main>
     <nav className="nav shell">
       <button className="brand" onClick={closeStudio} aria-label="На главную">MIRR<span>AI</span></button>
@@ -213,7 +276,7 @@ export default function Home() {
         {mode === "space" ? <div className="ar-stage">
           {React.createElement("model-viewer", {
             ref: arRef,
-            src: "/chair.glb",
+            src: modelSource,
             alt: "Объёмная 3D-модель кресла Cloud",
             ar: true,
             "ar-modes": "webxr scene-viewer quick-look",
@@ -240,7 +303,8 @@ export default function Home() {
           {cameraOn&&<div className="tracking-state"><i/><span>{trackingStatus}</span></div>}
           <div className="camera-badges"><span>AI TRACKING</span><span>BODY MESH</span></div>
         </div>}
-        <aside className="controls"><div><p className="control-label">Выбрано</p><h3>{catalog[active].name}</h3><span className="material-dot" style={{background:catalog[active].color}}/></div>
+        <aside className="controls"><div><p className="control-label">Выбрано</p><h3>{customName || catalog[active].name}</h3><span className="material-dot" style={{background:catalog[active].color}}/></div>
+          {!isWidget && <div className="asset-upload"><p className="control-label">Свой товар</p><label className="upload-button"><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,.glb,.gltf" onChange={event => handleAsset(event.target.files?.[0])}/><span>＋</span><b>Фото или 3D-модель</b></label>{customPreview && <img className="upload-preview" src={customPreview} alt="Загруженный товар"/>}{uploadState !== "idle" && <div className={`asset-result ${uploadState}`}><span>{uploadState === "ready" ? "✓" : uploadState === "error" ? "!" : "•••"}</span><div><strong>{customName}</strong><small>{uploadMessage}</small></div></div>}</div>}
           {mode==="clothes"?<div><p className="control-label">Размер</p><div className="sizes">{["XS","S","M","L","XL"].map(s=><button className={size===s?"active":""} onClick={()=>setSize(s)} key={s}>{s}</button>)}</div><p className="fit-note">Рекомендуем <strong>M</strong> по вашей калибровке</p></div>:<div><p className="control-label">Настоящий AR</p><div className="ar-features"><span>Поверхности</span><span>Окклюзия</span><span>Масштаб 1:1</span><span>Тени</span></div><p className="fit-note ar-state">{arStatus}</p></div>}
           {mode === "space" ? <button className="primary" onClick={openAR}>Открыть системный AR <span>↗</span></button> : !cameraOn?<button className="primary" onClick={startCamera}>Включить камеру <span>→</span></button>:cameraError?<button className="primary" onClick={retryCamera}>Повторить запуск <span>↻</span></button>:<button className="primary">Сделать снимок <span>→</span></button>}
           {cameraError&&<p className="error">{cameraError}</p>}<p className="privacy">Кадры обрабатываются на вашем устройстве и не сохраняются.</p>

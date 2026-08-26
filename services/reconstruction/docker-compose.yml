@@ -1,0 +1,17 @@
+services:
+  gateway:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      HUNYUAN_URL: http://host.docker.internal:8081
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      MAX_UPLOAD_BYTES: 20971520
+    volumes:
+      - mirrai-assets:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  mirrai-assets:
