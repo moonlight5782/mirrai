@@ -15,6 +15,13 @@
       "when": 1787850976111,
       "tag": "0001_sad_roughhouse",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787871293097,
+      "tag": "0002_complex_tigra",
+      "breakpoints": true
     }
   ]
 }

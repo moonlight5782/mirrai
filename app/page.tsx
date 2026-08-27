@@ -94,28 +94,20 @@ export default function Home() {
 
   function selectProduct(index: number) { resetCustomAsset(); setActive(index); setArStatus("Загружаем выбранную модель…"); }
 
-  function applyRealScale(viewer: ModelViewerElement) {
-    const source = viewer.getDimensions?.();
-    if (!source || !source.x || !source.y || !source.z) return;
-    const clamp = (value: number) => Math.max(.01, Math.min(100, value));
-    const scale = [clamp((selectedDimensions.width / 100) / source.x), clamp((selectedDimensions.height / 100) / source.y), clamp((selectedDimensions.depth / 100) / source.z)];
-    viewer.setAttribute("scale", scale.map(value => value.toFixed(5)).join(" "));
-  }
-
   useEffect(() => {
     if (view !== "viewer" || !arRef.current) return;
     const viewer = arRef.current;
-    const onLoad = () => { applyRealScale(viewer); setArStatus(`${customName || selected.name} готов — масштаб ${dimensionsLabel(selectedDimensions)}`); emitWidgetEvent("model_ready"); };
+    const onLoad = () => { const source = viewer.getDimensions?.(); if (source?.x && source.y && source.z) { const clamp = (value: number) => Math.max(.01, Math.min(100, value)); const scale = [clamp((selectedDimensions.width / 100) / source.x), clamp((selectedDimensions.height / 100) / source.y), clamp((selectedDimensions.depth / 100) / source.z)]; viewer.setAttribute("scale", scale.map(value => value.toFixed(5)).join(" ")); } setArStatus(`${customName || selected.name} готов — масштаб ${selectedDimensions.width} × ${selectedDimensions.depth} × ${selectedDimensions.height} см`); if (isWidget && window.parent !== window) window.parent.postMessage({ source: "mirrai-widget", event: "model_ready", productId: selected.id, at: new Date().toISOString() }, targetOrigin); };
     const onError = () => setArStatus("Модель не загрузилась. Проверьте GLB/USDZ товара.");
     const onArStatus = (event: Event) => {
       const status = (event as CustomEvent<{ status: string }>).detail?.status;
-      if (status === "object-placed") { setArStatus("Предмет размещён в вашем пространстве"); emitWidgetEvent("object_placed"); }
+      if (status === "object-placed") { setArStatus("Предмет размещён в вашем пространстве"); if (isWidget && window.parent !== window) window.parent.postMessage({ source: "mirrai-widget", event: "object_placed", productId: selected.id, at: new Date().toISOString() }, targetOrigin); }
       else if (status === "failed") setArStatus("AR не запустился — откройте страницу в Safari на iPhone или Chrome на Android");
       else setArStatus("Медленно направляйте камеру на свободный участок пола…");
     };
     viewer.addEventListener("load", onLoad); viewer.addEventListener("error", onError); viewer.addEventListener("ar-status", onArStatus);
     return () => { viewer.removeEventListener("load", onLoad); viewer.removeEventListener("error", onError); viewer.removeEventListener("ar-status", onArStatus); };
-  }, [view, modelSource, selected.name, selectedDimensions.width, selectedDimensions.height, selectedDimensions.depth]);
+  }, [view, modelSource, selected.id, selected.name, selectedDimensions.width, selectedDimensions.height, selectedDimensions.depth, customName, isWidget, targetOrigin]);
 
   async function openAR() {
     if (photoPending) { setArStatus("Сначала дождитесь готовой 3D-модели"); return; }

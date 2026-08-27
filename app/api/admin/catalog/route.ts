@@ -1,26 +1,17 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getChatGPTUser } from "../../../chatgpt-auth";
 import { getDb } from "../../../../db";
-import { productModels, products, shops } from "../../../../db/schema";
+import { productModels, products } from "../../../../db/schema";
+import { authorizedShop } from "../../../../db/authorization";
 
 const statuses = new Set(["missing", "queued", "processing", "review", "ready", "published", "failed"]);
 
-async function ownedShop(userId: string) {
-  const db = getDb();
-  let [shop] = await db.select().from(shops).where(eq(shops.ownerUserId, userId)).limit(1);
-  if (shop) return shop;
-  const [unclaimed] = await db.select().from(shops).where(isNull(shops.ownerUserId)).limit(1);
-  if (!unclaimed) return null;
-  await db.update(shops).set({ ownerUserId: userId }).where(and(eq(shops.id, unclaimed.id), isNull(shops.ownerUserId)));
-  [shop] = await db.select().from(shops).where(eq(shops.ownerUserId, userId)).limit(1);
-  return shop ?? null;
-}
-
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
-  const shop = await ownedShop(user.userId);
-  if (!shop) return Response.json({ error: "shop_not_found" }, { status: 404 });
+  const access = await authorizedShop(user, new URL(request.url).searchParams.get("shop"));
+  if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
+  const shop = access.shop;
   const db = getDb();
   const rows = await db.select({ product: products, model: productModels }).from(products).leftJoin(productModels, eq(productModels.productId, products.id)).where(eq(products.shopId, shop.id)).orderBy(products.name);
   const items = rows.map(({ product, model }) => ({ ...product, model: model ?? { status: "missing", glbUrl: null, usdzUrl: null, sourceType: "none", validationMessage: "3D-модель не загружена", qualityScore: null } }));
@@ -31,9 +22,10 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
-  const shop = await ownedShop(user.userId);
-  if (!shop) return Response.json({ error: "shop_not_found" }, { status: 404 });
-  const body = await request.json() as { productId?: number; status?: string; glbUrl?: string; usdzUrl?: string; validationMessage?: string };
+  const body = await request.json() as { shop?: string; productId?: number; status?: string; glbUrl?: string; usdzUrl?: string; validationMessage?: string };
+  const access = await authorizedShop(user, body.shop);
+  if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
+  const shop = access.shop;
   const productId = Number(body.productId);
   const status = body.status ?? "missing";
   if (!Number.isInteger(productId) || !statuses.has(status)) return Response.json({ error: "invalid_payload" }, { status: 400 });

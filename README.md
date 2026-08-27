@@ -17,6 +17,11 @@ MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product fro
 - nontechnical `/admin/setup` wizard with domain protection, platform-specific copy, installation detection, and developer handoff;
 - public widget configuration by `shopId + SKU` instead of exposing asset details in store code;
 - server-side widget event collection;
+- multi-store memberships, operator client management and email-based owner invitations;
+- CSV catalog import with a downloadable template;
+- first-party GLB/USDZ uploads stored in R2;
+- 30-day AR funnel analytics per store and product;
+- SDK 1.0 batch configuration, one shared modal and dynamic-page observation;
 - responsive Russian-language interface and Cloudflare-compatible Sites build.
 
 ## Development
@@ -90,6 +95,15 @@ For a full-store installation, add the script once and mark each product-card sl
 ```
 
 The SDK reports its first valid load to the setup wizard, so a store owner can verify installation without inspecting code.
+
+## Commercial pilot operations
+
+- `/admin/clients` creates merchant accounts and assigns the owner email.
+- `/admin/catalog?shop=SHOP_ID` imports CSV, uploads GLB/USDZ, validates and publishes models.
+- `/admin/setup?shop=SHOP_ID` configures the allowed domain and produces the integration snippet.
+- `/admin/analytics?shop=SHOP_ID` shows the 30-day funnel from widget open to AR placement.
+
+Uploaded binaries are stored in the `UPLOADS` R2 binding and served through immutable asset URLs. The public SDK batches up to 100 SKU configurations per request and watches dynamically rendered product cards.
 
 ## Self-hosted 3D generation
 

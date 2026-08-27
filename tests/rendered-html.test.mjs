@@ -86,3 +86,30 @@ test("nontechnical setup wizard provides auto-scan installation and domain check
   assert.match(cors, /Access-Control-Allow-Origin/);
   assert.match(migration, /installation_status/);
 });
+
+test("commercial pilot architecture supports tenants, imports, R2 assets and scalable SDK", async () => {
+  const [schema, auth, clients, importer, upload, config, sdk, hosting, migration] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/authorization.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/clients/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/catalog/import/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/assets/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/widget/config/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8"),
+    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0002_complex_tigra.sql", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /shopMembers/); assert.match(schema, /shopInvites/); assert.match(schema, /platformOperators/); assert.match(schema, /export const assets/);
+  assert.match(auth, /acceptInvites/); assert.match(clients, /ownerEmail/); assert.match(importer, /parseCsv/); assert.match(upload, /getUploadsBucket/);
+  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "1\.0\.0"/); assert.match(sdk, /destroy/);
+  assert.match(hosting, /"r2": "UPLOADS"/); assert.match(migration, /CREATE TABLE `assets`/);
+});
+
+test("store owners receive installable WooCommerce and Shopify integrations", async () => {
+  const [woo, shopify] = await Promise.all([
+    readFile(new URL("../integrations/woocommerce/mirrai-ar/mirrai-ar.php", import.meta.url), "utf8"),
+    readFile(new URL("../integrations/shopify/blocks/mirrai-ar.liquid", import.meta.url), "utf8"),
+  ]);
+  assert.match(woo, /Plugin Name: MIRRAI AR/); assert.match(woo, /woocommerce_after_add_to_cart_form/); assert.match(woo, /variation\.sku/);
+  assert.match(shopify, /selected_or_first_available_variant/); assert.match(shopify, /variant:change/); assert.match(shopify, /MIRRAI Shop ID/);
+});

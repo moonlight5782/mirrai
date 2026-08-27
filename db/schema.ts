@@ -11,9 +11,36 @@ export const shops = sqliteTable("shops", {
   platform: text("platform").notNull().default("other"),
   installationStatus: text("installation_status").notNull().default("not_started"),
   installationCheckedAt: text("installation_checked_at"),
+  plan: text("plan").notNull().default("pilot"),
+  trialEndsAt: text("trial_ends_at"),
   ownerUserId: text("owner_user_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_shops_slug").on(table.slug)]);
+
+export const shopMembers = sqliteTable("shop_members", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  email: text("email").notNull().default(""),
+  role: text("role").notNull().default("owner"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("idx_shop_members_shop_user").on(table.shopId, table.userId), index("idx_shop_members_user").on(table.userId)]);
+
+export const platformOperators = sqliteTable("platform_operators", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  email: text("email").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("idx_platform_operators_user").on(table.userId)]);
+
+export const shopInvites = sqliteTable("shop_invites", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role").notNull().default("owner"),
+  acceptedAt: text("accepted_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("idx_shop_invites_shop_email").on(table.shopId, table.email), index("idx_shop_invites_email").on(table.email)]);
 
 export const products = sqliteTable("products", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -42,8 +69,21 @@ export const productModels = sqliteTable("product_models", {
   sourceType: text("source_type").notNull().default("none"),
   validationMessage: text("validation_message"),
   qualityScore: integer("quality_score"),
+  version: integer("version").notNull().default(1),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_product_models_product").on(table.productId), index("idx_product_models_status").on(table.status)]);
+
+export const assets = sqliteTable("assets", {
+  id: text("id").primaryKey(),
+  shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  storageKey: text("storage_key").notNull(),
+  fileName: text("file_name").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  kind: text("kind").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("idx_assets_storage_key").on(table.storageKey), index("idx_assets_shop_created").on(table.shopId, table.createdAt)]);
 
 export const widgetEvents = sqliteTable("widget_events", {
   id: integer("id").primaryKey({ autoIncrement: true }),

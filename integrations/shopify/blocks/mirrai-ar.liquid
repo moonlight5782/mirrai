@@ -1,0 +1,29 @@
+{% liquid
+  assign current_variant = product.selected_or_first_available_variant
+  assign mirrai_sku = current_variant.sku | default: product.handle
+%}
+<div id="mirrai-slot-{{ block.id }}" data-mirrai-sku="{{ mirrai_sku | escape }}"></div>
+<script>
+  (function () {
+    var shopId = {{ block.settings.shop_id | json }};
+    var runtime = {{ block.settings.runtime_url | json }}.replace(/\/$/, '');
+    if (!shopId) return;
+    if (!window.__mirraiSdkLoading) {
+      window.__mirraiSdkLoading = true;
+      var sdk = document.createElement('script'); sdk.src = runtime + '/mirrai-widget.js'; sdk.dataset.shopId = shopId; sdk.dataset.auto = 'scan'; sdk.defer = true; document.head.appendChild(sdk);
+    } else if (window.MirraiWidget) window.MirraiWidget.scan();
+    document.addEventListener('variant:change', function (event) {
+      var sku = event.detail && event.detail.variant && event.detail.variant.sku; var slot = document.getElementById('mirrai-slot-{{ block.id }}'); if (!sku || !slot) return; slot.innerHTML = ''; slot.dataset.mirraiSku = sku; slot.removeAttribute('data-mirrai-mounted'); if (window.MirraiWidget) window.MirraiWidget.scan();
+    });
+  })();
+</script>
+{% schema %}
+{
+  "name": "MIRRAI AR",
+  "target": "section",
+  "settings": [
+    { "type": "text", "id": "shop_id", "label": "MIRRAI Shop ID" },
+    { "type": "url", "id": "runtime_url", "label": "MIRRAI Runtime URL", "default": "https://mirrai-try-on.moonlight-5782.chatgpt.site" }
+  ]
+}
+{% endschema %}

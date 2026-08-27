@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   if (!row) return widgetJson(request, { error: "product_not_found" }, { status: 404 });
   const allowed = JSON.parse(row.allowedDomains || "[]") as string[];
   const domain = requestDomain(request);
-  if (domain && allowed.length && !allowed.includes(domain)) return widgetJson(request, { error: "domain_not_allowed" }, { status: 403 });
+  if (allowed.length && !allowed.includes(domain)) return widgetJson(request, { error: "domain_not_allowed" }, { status: 403 });
   await db.insert(widgetEvents).values({ shopId: row.shopId, productId: row.productId, event: body.event });
   return widgetJson(request, { ok: true }, { status: 202 });
 }
