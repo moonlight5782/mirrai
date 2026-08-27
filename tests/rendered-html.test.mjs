@@ -49,4 +49,22 @@ test("embeddable SDK creates a product-aware accessible AR launcher", async () =
   assert.match(sdk, /productId/);
   assert.match(sdk, /object_placed/);
   assert.match(sdk, /mirrai:event/);
+  assert.match(sdk, /api\/widget\/config/);
+  assert.match(sdk, /shopId/);
+});
+
+test("admin catalog is backed by durable model lifecycle data", async () => {
+  const [schema, admin, configRoute, migration] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/catalog/catalog-admin.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/widget/config/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0000_special_lethal_legion.sql", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /productModels/);
+  assert.match(schema, /widgetEvents/);
+  assert.match(admin, /Без модели/);
+  assert.match(admin, /Опубликована/);
+  assert.match(configRoute, /subscriptionStatus/);
+  assert.match(configRoute, /status !== "published"/);
+  assert.match(migration, /CLOUD-001/);
 });

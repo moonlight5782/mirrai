@@ -12,6 +12,10 @@ MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product fro
 - embeddable widget mode that receives the selected store product through URL parameters;
 - widget events for `model_ready`, `ar_open`, and `object_placed`;
 - subscription fallback state;
+- persistent merchant catalog with model coverage and lifecycle statuses;
+- protected `/admin/catalog` dashboard for GLB/USDZ assignment and publication;
+- public widget configuration by `shopId + SKU` instead of exposing asset details in store code;
+- server-side widget event collection;
 - responsive Russian-language interface and Cloudflare-compatible Sites build.
 
 ## Development
@@ -68,6 +72,14 @@ The production-style SDK is available at `/mirrai-widget.js`. It can auto-mount 
 ```
 
 See `/demo-store` for the complete store-card experience. Mobile shoppers open the AR viewer in a new tab for reliable native handoff; desktop shoppers get an accessible modal preview.
+
+For catalog-backed installation, the store only supplies merchant and SKU identifiers:
+
+```js
+MirraiWidget.mount({ target: "#mirrai-slot", shopId: "nordform", sku: "CLOUD-001" });
+```
+
+The SDK requests `/api/widget/config`, and the button appears only when the subscription is active and the model status is `published`. Administrators manage coverage, GLB/USDZ URLs and validation notes at `/admin/catalog`. The dashboard is sign-in gated and the current private Site remains owner-only.
 
 ## Self-hosted 3D generation
 

@@ -9,6 +9,8 @@
     var data = node && node.dataset ? node.dataset : {};
     return {
       target: data.target || "",
+      shopId: data.shopId || "",
+      sku: data.sku || "",
       productId: data.productId || "product",
       name: data.name || "Посмотреть товар у себя",
       price: data.price || "",
@@ -52,6 +54,7 @@
     button.textContent = config.label + "  ↗";
     style(button, { width: "100%", minHeight: "50px", border: "0", background: "#181814", color: "#fff", padding: "14px 18px", font: "600 14px/1.2 Arial,sans-serif", letterSpacing: ".01em", cursor: "pointer" });
     target.appendChild(button);
+    if (config.shopId && config.sku && !config.model) button.style.display = "none";
 
     var overlay = document.createElement("div");
     overlay.setAttribute("role", "dialog");
@@ -72,10 +75,27 @@
     frameWrap.appendChild(close); frameWrap.appendChild(iframe); overlay.appendChild(frameWrap); document.body.appendChild(overlay);
 
     function closeModal() { overlay.style.display = "none"; iframe.src = "about:blank"; document.body.style.overflow = ""; button.focus(); }
+    function recordEvent(name) {
+      if (!config.shopId || !config.sku) return;
+      fetch(new URL("/api/widget/events", scriptOrigin), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shopId: config.shopId, sku: config.sku, event: name }), keepalive: true }).catch(function () {});
+    }
+    function resolveCatalogProduct() {
+      if (!config.shopId || !config.sku || config.model) return Promise.resolve(true);
+      var endpoint = new URL("/api/widget/config", scriptOrigin);
+      endpoint.searchParams.set("shop", config.shopId); endpoint.searchParams.set("sku", config.sku);
+      return fetch(endpoint).then(function (response) { return response.json(); }).then(function (result) {
+        if (!result.available) {
+          if (result.reason === "subscription_inactive") { button.textContent = "Вы прекрасно выглядите в любой одежде"; button.disabled = true; button.style.display = "block"; }
+          return false;
+        }
+        config = Object.assign(config, result); button.setAttribute("aria-label", config.label + ": " + config.name); button.style.display = "block"; return true;
+      }).catch(function () { return false; });
+    }
     function open() {
       var url = viewerUrl(config);
       var mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       window.dispatchEvent(new CustomEvent("mirrai:event", { detail: { event: "widget_open", productId: config.productId } }));
+      recordEvent("widget_open");
       if (config.mode === "link" || (config.mode === "auto" && mobile)) { window.open(url, "_blank", "noopener,noreferrer"); return; }
       iframe.src = url; overlay.style.display = "flex"; document.body.style.overflow = "hidden"; close.focus();
     }
@@ -87,9 +107,11 @@
     window.addEventListener("message", function (event) {
       if (event.origin !== scriptOrigin || !event.data || event.data.source !== "mirrai-widget") return;
       if (allowedEvents.indexOf(event.data.event) === -1) return;
+      recordEvent(event.data.event);
       window.dispatchEvent(new CustomEvent("mirrai:event", { detail: event.data }));
     });
-    return { open: open, close: closeModal, button: button, update: function (next) { config = Object.assign(config, next || {}); } };
+    resolveCatalogProduct();
+    return { open: open, close: closeModal, button: button, update: function (next) { config = Object.assign(config, next || {}); resolveCatalogProduct(); } };
   }
 
   window.MirraiWidget = { version: "0.2.0", mount: mount };

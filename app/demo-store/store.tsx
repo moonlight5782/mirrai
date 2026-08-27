@@ -18,7 +18,7 @@ export function DemoStore() {
     const script = document.createElement("script");
     script.src = "/mirrai-widget.js";
     script.dataset.auto = "false";
-    script.onload = () => window.MirraiWidget?.mount({ target: "#mirrai-demo-slot", productId: "cloud-chair-001", name: "Кресло Cloud", price: "67 000 ₽", category: "Кресла", material: "Букле, светлый беж", model: `${window.location.origin}/chair.glb`, width: "84", height: "76", depth: "82", color: "#d2bda8" });
+    script.onload = () => window.MirraiWidget?.mount({ target: "#mirrai-demo-slot", shopId: "nordform", sku: "CLOUD-001" });
     document.body.appendChild(script);
     return () => { window.removeEventListener("mirrai:event", onEvent); script.remove(); };
   }, []);
