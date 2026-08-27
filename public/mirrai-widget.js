@@ -114,9 +114,27 @@
     return { open: open, close: closeModal, button: button, update: function (next) { config = Object.assign(config, next || {}); resolveCatalogProduct(); } };
   }
 
-  window.MirraiWidget = { version: "0.2.0", mount: mount };
+  function reportInstallation(shopId) {
+    if (!shopId) return;
+    fetch(new URL("/api/widget/install", scriptOrigin), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shopId: shopId, pageUrl: window.location.href }), keepalive: true }).catch(function () {});
+  }
+
+  function scan() {
+    var globalConfig = readData(script);
+    var nodes = document.querySelectorAll("[data-mirrai-sku]");
+    nodes.forEach(function (node) {
+      if (node.getAttribute("data-mirrai-mounted") === "true") return;
+      node.setAttribute("data-mirrai-mounted", "true");
+      var local = readData(node);
+      mount(Object.assign(globalConfig, local, { target: node, shopId: local.shopId || globalConfig.shopId }));
+    });
+    reportInstallation(globalConfig.shopId);
+  }
+
+  window.MirraiWidget = { version: "0.3.0", mount: mount, scan: scan };
   if (script && script.dataset.auto !== "false") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { mount(); }, { once: true });
-    else mount();
+    var start = function () { if (script.dataset.auto === "scan" || document.querySelector("[data-mirrai-sku]")) scan(); else { mount(); reportInstallation(readData(script).shopId); } };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+    else start();
   }
 })();

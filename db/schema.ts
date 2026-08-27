@@ -6,6 +6,11 @@ export const shops = sqliteTable("shops", {
   slug: text("slug").notNull(),
   name: text("name").notNull(),
   subscriptionStatus: text("subscription_status").notNull().default("trial"),
+  websiteUrl: text("website_url"),
+  allowedDomains: text("allowed_domains").notNull().default("[]"),
+  platform: text("platform").notNull().default("other"),
+  installationStatus: text("installation_status").notNull().default("not_started"),
+  installationCheckedAt: text("installation_checked_at"),
   ownerUserId: text("owner_user_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_shops_slug").on(table.slug)]);

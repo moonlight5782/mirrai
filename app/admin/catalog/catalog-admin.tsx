@@ -39,7 +39,7 @@ export function CatalogAdmin({ displayName }: { displayName: string }) {
   }
 
   return <main className="admin-shell">
-    <aside className="admin-sidebar"><Link href="/" className="admin-brand">MIRR<span>AI</span></Link><nav><b>Управление</b><a className="active" href="#catalog">Каталог моделей</a><a href="#queue">Очередь генерации</a><a href="#analytics">Аналитика</a><b>Магазин</b><a href="#integration">Интеграция</a><a href="#subscription">Подписка</a></nav><div><small>Администратор</small><span>{displayName}</span></div></aside>
+    <aside className="admin-sidebar"><Link href="/" className="admin-brand">MIRR<span>AI</span></Link><nav><b>Управление</b><Link href="/admin/setup">Мастер установки</Link><a className="active" href="#catalog">Каталог моделей</a><a href="#queue">Очередь генерации</a><a href="#analytics">Аналитика</a><b>Магазин</b><Link href="/admin/setup">Интеграция</Link><a href="#subscription">Подписка</a></nav><div><small>Администратор</small><span>{displayName}</span></div></aside>
     <section className="admin-main" id="catalog">
       <header className="admin-head"><div><p>КАТАЛОГ / 3D-ПОКРЫТИЕ</p><h1>Модели товаров</h1></div><Link href="/demo-store">Открыть демо магазина ↗</Link></header>
       {data ? <><div className="admin-shop"><div><i/><span><strong>{data.shop.name}</strong><small>shopId: {data.shop.slug}</small></span></div><b className={`subscription ${data.shop.subscriptionStatus}`}>{data.shop.subscriptionStatus === "active" ? "Подписка активна" : data.shop.subscriptionStatus}</b></div>

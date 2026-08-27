@@ -68,3 +68,21 @@ test("admin catalog is backed by durable model lifecycle data", async () => {
   assert.match(configRoute, /status !== "published"/);
   assert.match(migration, /CLOUD-001/);
 });
+
+test("nontechnical setup wizard provides auto-scan installation and domain checks", async () => {
+  const [wizard, sdk, installRoute, cors, migration] = await Promise.all([
+    readFile(new URL("../app/admin/setup/setup-wizard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/widget/install/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/widget/cors.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0001_sad_roughhouse.sql", import.meta.url), "utf8"),
+  ]);
+  assert.match(wizard, /Подключение магазина/);
+  assert.match(wizard, /Отправить разработчику/);
+  assert.match(wizard, /data-mirrai-sku/);
+  assert.match(sdk, /querySelectorAll\("\[data-mirrai-sku\]"\)/);
+  assert.match(sdk, /api\/widget\/install/);
+  assert.match(installRoute, /domain_not_allowed/);
+  assert.match(cors, /Access-Control-Allow-Origin/);
+  assert.match(migration, /installation_status/);
+});
