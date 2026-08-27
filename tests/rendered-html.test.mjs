@@ -31,3 +31,22 @@ test("widget contract includes product data, scale and store events", async () =
   assert.match(page, /object_placed/);
   assert.match(page, /subscription.*inactive/);
 });
+
+test("renders a real store-card integration demo", async () => {
+  const response = await render("/demo-store");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Демонстрация виджета MIRRAI/i);
+  assert.match(html, /Кресло Cloud/i);
+  assert.match(html, /mirrai-demo-slot/i);
+});
+
+test("embeddable SDK creates a product-aware accessible AR launcher", async () => {
+  const sdk = await readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8");
+  assert.match(sdk, /window\.MirraiWidget/);
+  assert.match(sdk, /xr-spatial-tracking/);
+  assert.match(sdk, /aria-modal/);
+  assert.match(sdk, /productId/);
+  assert.match(sdk, /object_placed/);
+  assert.match(sdk, /mirrai:event/);
+});

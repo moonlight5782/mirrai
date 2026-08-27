@@ -50,6 +50,25 @@ Dimensions are centimeters. Remote assets must use HTTPS and allow cross-origin 
 
 `subscription=inactive` demonstrates the inactive-subscription fallback. Production entitlement must be issued and verified by the merchant backend; a URL parameter is not a security mechanism.
 
+The production-style SDK is available at `/mirrai-widget.js`. It can auto-mount from `data-*` attributes or be mounted on dynamic product pages:
+
+```html
+<div id="mirrai-slot"></div>
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget.js" data-auto="false"></script>
+<script>
+  MirraiWidget.mount({
+    target: "#mirrai-slot",
+    productId: "chair-42",
+    name: "Кресло Cloud",
+    model: "https://cdn.store.example/chair.glb",
+    iosModel: "https://cdn.store.example/chair.usdz",
+    width: "84", height: "76", depth: "82"
+  });
+</script>
+```
+
+See `/demo-store` for the complete store-card experience. Mobile shoppers open the AR viewer in a new tab for reliable native handoff; desktop shoppers get an accessible modal preview.
+
 ## Self-hosted 3D generation
 
 The direct-site flow detects product images and GLB files automatically. GLB opens locally. A photo is submitted to a self-hosted Hunyuan3D 2.1 service and returns as a textured model.
