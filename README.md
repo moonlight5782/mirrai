@@ -85,7 +85,7 @@ For catalog-backed installation, the store only supplies merchant and SKU identi
 MirraiWidget.mount({ target: "#mirrai-slot", shopId: "nordform", sku: "CLOUD-001" });
 ```
 
-The SDK requests `/api/widget/config`, and the button appears only when the subscription is active and the model status is `published`. Administrators manage coverage, GLB/USDZ URLs and validation notes at `/admin/catalog`. The dashboard is sign-in gated and the current private Site remains owner-only.
+The SDK requests `/api/widget/config`, and the button appears only when the subscription is active and the model status is `published`. Administrators manage coverage, GLB/USDZ URLs and validation notes at `/admin/catalog`. The public product demo stays open, while every dashboard section uses a dedicated sign-in gate and server-side shop authorization.
 
 For a full-store installation, add the script once and mark each product-card slot with its SKU. The SDK scans all matching slots automatically:
 

@@ -69,6 +69,20 @@ test("admin catalog is backed by durable model lifecycle data", async () => {
   assert.match(migration, /CLOUD-001/);
 });
 
+test("anonymous visitors get a working admin entry instead of an auth redirect", async () => {
+  for (const path of ["/admin/clients", "/admin/catalog?shop=nordform", "/admin/analytics?shop=nordform", "/admin/setup?shop=nordform"]) {
+    const response = await render(path);
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /Войти в кабинет/i);
+    assert.match(html, /signin-with-chatgpt/i);
+    assert.match(html, /Клиенты/i);
+    assert.match(html, /Каталог/i);
+    assert.match(html, /Аналитика/i);
+    assert.match(html, /Установка/i);
+  }
+});
+
 test("nontechnical setup wizard provides auto-scan installation and domain checks", async () => {
   const [wizard, sdk, installRoute, cors, migration] = await Promise.all([
     readFile(new URL("../app/admin/setup/setup-wizard.tsx", import.meta.url), "utf8"),
