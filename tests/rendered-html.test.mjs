@@ -142,3 +142,14 @@ test("HUGGE pilot imports website photos and installs automatically on OpenCart"
   assert.match(syncRoute, /validatedCatalogSource/); assert.match(syncRoute, /slice\(offset, offset \+ 100\)/); assert.match(parser, /parseFurnitureSitemap/); assert.match(parser, /source\.protocol !== "https:"/);
   assert.match(catalog, /Обновить с сайта/); assert.match(catalog, /Фото найдено/); assert.match(setup, /data-auto="product"/); assert.match(sdk, /\.us-product-info-code/); assert.match(sdk, /data-mirrai-auto-product/);
 });
+
+test("batch 3D generation is durable and never publishes unreviewed models", async () => {
+  const [schema, migration, route, catalog] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0004_early_legion.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/generation/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/catalog/catalog-admin.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /generationJobs/); assert.match(migration, /hugge-alba-89990/); assert.match(route, /RECONSTRUCTION_API_URL/);
+  assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
+});

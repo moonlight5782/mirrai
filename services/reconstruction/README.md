@@ -11,7 +11,7 @@
 ## Запуск
 
 1. Установите официальный Hunyuan3D 2.1 и запустите его API на порту `8081` с загруженными весами.
-2. Задайте `ALLOWED_ORIGINS=https://адрес-сайта`.
+2. Задайте `ALLOWED_ORIGINS=https://адрес-сайта` и длинный случайный `API_TOKEN`. То же значение сохраните в MIRRAI как секрет `RECONSTRUCTION_API_TOKEN`. Пустой токен допустим только локально.
 3. В этом каталоге выполните `docker compose up -d --build`.
 4. Опубликуйте порт 8000 через reverse proxy с TLS и проверьте `/health`.
 5. Соберите сайт с `NEXT_PUBLIC_RECONSTRUCTION_API_URL=https://3d.example.com`.

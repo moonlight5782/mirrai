@@ -7,6 +7,7 @@ services:
     environment:
       HUNYUAN_URL: http://host.docker.internal:8081
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      API_TOKEN: ${API_TOKEN:-}
       MAX_UPLOAD_BYTES: 20971520
     volumes:
       - mirrai-assets:/data

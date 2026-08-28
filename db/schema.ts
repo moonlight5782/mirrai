@@ -81,6 +81,28 @@ export const productModels = sqliteTable("product_models", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_product_models_product").on(table.productId), index("idx_product_models_status").on(table.status)]);
 
+export const generationJobs = sqliteTable("generation_jobs", {
+  id: text("id").primaryKey(),
+  shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("queued"),
+  priority: integer("priority").notNull().default(0),
+  attempt: integer("attempt").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  externalJobId: text("external_job_id"),
+  sourceImages: text("source_images").notNull().default("[]"),
+  resultGlbUrl: text("result_glb_url"),
+  errorCode: text("error_code"),
+  errorMessage: text("error_message"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  startedAt: text("started_at"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  completedAt: text("completed_at"),
+}, table => [
+  index("idx_generation_jobs_shop_status_priority").on(table.shopId, table.status, table.priority),
+  index("idx_generation_jobs_product_created").on(table.productId, table.createdAt),
+]);
+
 export const assets = sqliteTable("assets", {
   id: text("id").primaryKey(),
   shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
