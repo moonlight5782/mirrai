@@ -105,6 +105,18 @@ The SDK reports its first valid load to the setup wizard, so a store owner can v
 
 Uploaded binaries are stored in the `UPLOADS` R2 binding and served through immutable asset URLs. The public SDK batches up to 100 SKU configurations per request and watches dynamically rendered product cards.
 
+## HUGGE.md pilot
+
+The first merchant pilot is provisioned as `hugge-md`. MIRRAI imports furniture names, source URLs, dimensions and product photography from the store's OpenCart sitemap in batches of 100. The initial migration includes 16 priority furniture products; the current sitemap exposes 355 furniture candidates.
+
+For OpenCart product pages, the SDK can locate the UltraStore product code and insert its AR launcher without per-product markup:
+
+```html
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget.js" data-shop-id="hugge-md" data-auto="product" data-sku-prefix="HUGGE-" defer></script>
+```
+
+As of 28 August 2026, `hugge.md` serves an expired TLS certificate. The pilot remains marked `blocked` for automatic sync and installation until the merchant renews HTTPS; the already imported catalog is preserved.
+
 ## Self-hosted 3D generation
 
 The direct-site flow detects product images and GLB files automatically. GLB opens locally. A photo is submitted to a self-hosted Hunyuan3D 2.1 service and returns as a textured model.

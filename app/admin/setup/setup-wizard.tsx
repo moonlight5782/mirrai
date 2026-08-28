@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type SetupData = { shop: { slug: string; name: string; websiteUrl: string; platform: string; installationStatus: string; installationCheckedAt: string | null }; catalog: { total: number; published: number } };
-const platforms = [{ id: "shopify", name: "Shopify" }, { id: "woocommerce", name: "WooCommerce" }, { id: "tilda", name: "Tilda" }, { id: "custom", name: "Свой сайт" }, { id: "other", name: "Другая платформа" }];
+const platforms = [{ id: "shopify", name: "Shopify" }, { id: "woocommerce", name: "WooCommerce" }, { id: "opencart", name: "OpenCart" }, { id: "tilda", name: "Tilda" }, { id: "custom", name: "Свой сайт" }, { id: "other", name: "Другая платформа" }];
 
 export function SetupWizard({ displayName }: { displayName: string }) {
   const [data, setData] = useState<SetupData | null>(null);
@@ -24,7 +24,8 @@ export function SetupWizard({ displayName }: { displayName: string }) {
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
 
   const skuTemplate = platform === "shopify" ? "{{ product.selected_or_first_available_variant.sku }}" : platform === "woocommerce" ? "SKU-ТОВАРА" : "SKU-ТОВАРА";
-  const snippet = useMemo(() => data ? `<script src="${origin}/mirrai-widget.js" data-shop-id="${data.shop.slug}" data-auto="scan" defer></script>\n<div data-mirrai-sku="${skuTemplate}"></div>` : "", [data, origin, skuTemplate]);
+  const skuPrefix = data?.shop.slug === "hugge-md" ? "HUGGE-" : "";
+  const snippet = useMemo(() => data ? platform === "opencart" ? `<script src="${origin}/mirrai-widget.js" data-shop-id="${data.shop.slug}" data-auto="product" data-sku-prefix="${skuPrefix}" defer></script>` : `<script src="${origin}/mirrai-widget.js" data-shop-id="${data.shop.slug}" data-auto="scan" defer></script>\n<div data-mirrai-sku="${skuTemplate}"></div>` : "", [data, origin, platform, skuPrefix, skuTemplate]);
   const connected = data?.shop.installationStatus === "connected";
   const settingsReady = Boolean(data?.shop.websiteUrl);
 

@@ -115,7 +115,7 @@ test("commercial pilot architecture supports tenants, imports, R2 assets and sca
   ]);
   assert.match(schema, /shopMembers/); assert.match(schema, /shopInvites/); assert.match(schema, /platformOperators/); assert.match(schema, /export const assets/);
   assert.match(auth, /acceptInvites/); assert.match(clients, /ownerEmail/); assert.match(importer, /parseCsv/); assert.match(upload, /getUploadsBucket/);
-  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "1\.0\.0"/); assert.match(sdk, /destroy/);
+  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "1\.1\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
   assert.match(hosting, /"r2": "UPLOADS"/); assert.match(migration, /CREATE TABLE `assets`/);
 });
 
@@ -126,4 +126,19 @@ test("store owners receive installable WooCommerce and Shopify integrations", as
   ]);
   assert.match(woo, /Plugin Name: MIRRAI AR/); assert.match(woo, /woocommerce_after_add_to_cart_form/); assert.match(woo, /variation\.sku/);
   assert.match(shopify, /selected_or_first_available_variant/); assert.match(shopify, /variant:change/); assert.match(shopify, /MIRRAI Shop ID/);
+});
+
+test("HUGGE pilot imports website photos and installs automatically on OpenCart", async () => {
+  const [schema, migration, syncRoute, parser, catalog, setup, sdk] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0003_colossal_the_fallen.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/catalog/sync/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/catalog-sitemap.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/catalog/catalog-admin.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/setup/setup-wizard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /catalogSourceUrl/); assert.match(schema, /imageUrls/); assert.match(migration, /'hugge-md','HUGGE\.md'/); assert.match(migration, /HUGGE-89990/);
+  assert.match(syncRoute, /validatedCatalogSource/); assert.match(syncRoute, /slice\(offset, offset \+ 100\)/); assert.match(parser, /parseFurnitureSitemap/); assert.match(parser, /source\.protocol !== "https:"/);
+  assert.match(catalog, /Обновить с сайта/); assert.match(catalog, /Фото найдено/); assert.match(setup, /data-auto="product"/); assert.match(sdk, /\.us-product-info-code/); assert.match(sdk, /data-mirrai-auto-product/);
 });

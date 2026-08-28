@@ -4,7 +4,7 @@ import { getDb } from "../../../../db";
 import { productModels, products, shops } from "../../../../db/schema";
 import { authorizedShop } from "../../../../db/authorization";
 
-const platforms = new Set(["shopify", "woocommerce", "tilda", "custom", "other"]);
+const platforms = new Set(["shopify", "woocommerce", "opencart", "tilda", "custom", "other"]);
 
 function normalizeDomain(value: string) {
   const input = value.trim();
