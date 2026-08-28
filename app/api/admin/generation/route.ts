@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({})) as { shop?: string; productIds?: number[]; action?: "enqueue" | "run" };
   const access = await authorizedShop(user, body.shop);
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
-  if (body.action === "run") return runJobs(access.shop);
+  if (body.action === "run") return runJobs(access.shop, new URL(request.url).origin);
 
   const ids = [...new Set((body.productIds ?? []).map(Number).filter(Number.isInteger))].slice(0, 100);
   if (!ids.length) return Response.json({ error: "products_required" }, { status: 400 });
@@ -72,11 +72,11 @@ export async function POST(request: Request) {
   return Response.json({ ok: true, created, skipped, blocked: !configured || blockedBySource, serviceConfigured: configured });
 }
 
-async function runJobs(shop: typeof import("../../../../db/schema").shops.$inferSelect) {
+async function runJobs(shop: typeof import("../../../../db/schema").shops.$inferSelect, appOrigin: string) {
   const config = serviceConfig();
   if (!config) return Response.json({ error: "service_not_configured" }, { status: 503 });
   const db = getDb();
-  const rows = await db.select({ job: generationJobs, product: products }).from(generationJobs).innerJoin(products, eq(generationJobs.productId, products.id)).where(and(eq(generationJobs.shopId, shop.id), inArray(generationJobs.status, ["queued", "processing", "blocked"]))).orderBy(desc(generationJobs.priority)).limit(3);
+  const rows = await db.select({ job: generationJobs, product: products }).from(generationJobs).innerJoin(products, eq(generationJobs.productId, products.id)).where(and(eq(generationJobs.shopId, shop.id), inArray(generationJobs.status, ["queued", "processing", "blocked"]))).orderBy(desc(generationJobs.priority)).limit(config.kind === "huggingface" ? 1 : 3);
   let submitted = 0; let completed = 0; let failed = 0;
   for (const { job, product } of rows) {
     try {
@@ -84,16 +84,15 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
         const state = await pollGeneration(config, job.externalJobId);
         if (state.status === "ready" && state.model_url) { await storeGeneratedModel(shop.id, product.id, job.id, config, state.model_url, state.textured !== false); completed += 1; }
         else if (state.status === "failed" && config.kind === "huggingface" && hfJob(job.externalJobId).operation === "generation_all") {
-          const fallbackJobId = await submitProductImage(config, shop, product, job.sourceImages, "shape_generation");
+          const fallbackJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin, "shape_generation");
           await db.update(generationJobs).set({ status: "processing", externalJobId: fallbackJobId, errorCode: "texture_fallback", errorMessage: "Текстурирование временно недоступно — создаём геометрию для AR", updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
           await db.update(productModels).set({ status: "processing", validationMessage: "Создаём геометрию; текстуру можно добавить после генерации", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id));
           submitted += 1;
         } else if (state.status === "failed") throw new Error(state.error || "generation_failed");
         continue;
       }
-      if (shop.catalogSyncStatus === "blocked") continue;
       await db.update(generationJobs).set({ status: "submitting", attempt: job.attempt + 1, startedAt: job.startedAt ?? new Date().toISOString(), updatedAt: new Date().toISOString(), errorCode: null, errorMessage: null }).where(eq(generationJobs.id, job.id));
-      const externalJobId = await submitProductImage(config, shop, product, job.sourceImages);
+      const externalJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin);
       await db.update(generationJobs).set({ status: "processing", externalJobId, updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
       await db.update(productModels).set({ status: "processing", validationMessage: "3D-модель создаётся", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); submitted += 1;
     } catch (cause) {
@@ -108,9 +107,9 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
 
 function sameHost(imageUrl: string, websiteUrl: string | null) { try { return Boolean(websiteUrl) && new URL(imageUrl).hostname === new URL(websiteUrl!).hostname; } catch { return false; } }
 
-async function submitProductImage(config: ServiceConfig, shop: typeof import("../../../../db/schema").shops.$inferSelect, product: typeof products.$inferSelect, sourceImages: string, operation: HfOperation = "generation_all") {
+async function submitProductImage(config: ServiceConfig, shop: typeof import("../../../../db/schema").shops.$inferSelect, product: typeof products.$inferSelect, sourceImages: string, appOrigin: string, operation: HfOperation = "generation_all") {
   const imageUrl = imageList(sourceImages)[0];
-  if (!imageUrl || !sameHost(imageUrl, shop.websiteUrl)) throw new Error("invalid_source_image");
+  if (!imageUrl || (!sameHost(imageUrl, shop.websiteUrl) && !sameHost(imageUrl, appOrigin))) throw new Error("invalid_source_image");
   const source = await fetch(imageUrl);
   if (!source.ok) throw new Error(`source_${source.status}`);
   const bytes = await source.arrayBuffer();
