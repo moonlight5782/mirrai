@@ -150,6 +150,6 @@ test("batch 3D generation is durable and never publishes unreviewed models", asy
     readFile(new URL("../app/api/admin/generation/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/catalog/catalog-admin.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(schema, /generationJobs/); assert.match(migration, /hugge-alba-89990/); assert.match(route, /RECONSTRUCTION_API_URL/);
+  assert.match(schema, /generationJobs/); assert.match(migration, /hugge-alba-89990/); assert.match(route, /RECONSTRUCTION_API_URL/); assert.match(route, /HUGGINGFACE_SPACE_URL/); assert.match(route, /call\/generation_all/);
   assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
 });

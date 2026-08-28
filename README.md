@@ -127,6 +127,8 @@ The admin catalog now has a durable batch queue. An operator selects products wi
 
 Four HUGGE products are preloaded as the first batch: Alba HUGGE-89990, Ria HUGGE-109553, Ria HUGGE-107376 and Blackburn HUGGE-100326. They remain visibly blocked—not falsely complete—until both the HUGGE HTTPS source and the reconstruction service are available.
 
+For a no-cost pilot, MIRRAI can also submit jobs to a duplicated Hugging Face ZeroGPU Gradio Space through `HUGGINGFACE_SPACE_URL`. The exact nontechnical setup is documented in [`integrations/huggingface-space`](integrations/huggingface-space/README.md).
+
 AI reconstruction from one photo estimates hidden geometry. Store-published assets should use manufacturer CAD/3D files or multi-view capture and must pass dimension and visual QA.
 
 ## Verified devices

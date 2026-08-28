@@ -6,17 +6,25 @@ import { authorizedShop } from "../../../../db/authorization";
 import { getUploadsBucket } from "../../../../db/storage";
 import { assets, generationJobs, productModels, products } from "../../../../db/schema";
 
-type Runtime = { RECONSTRUCTION_API_URL?: string; RECONSTRUCTION_API_TOKEN?: string };
+type Runtime = { RECONSTRUCTION_API_URL?: string; RECONSTRUCTION_API_TOKEN?: string; HUGGINGFACE_SPACE_URL?: string; HUGGINGFACE_TOKEN?: string };
+type ServiceConfig = { kind: "gateway" | "huggingface"; url: string; token?: string };
 const activeStatuses = ["queued", "submitting", "processing", "blocked"];
 
-function serviceConfig() {
+function serviceConfig(): ServiceConfig | null {
   const runtime = env as unknown as Runtime;
+  const hf = runtime.HUGGINGFACE_SPACE_URL?.trim().replace(/\/$/, "");
+  if (hf) {
+    try {
+      const url = new URL(hf);
+      if (url.protocol === "https:" && url.hostname.endsWith(".hf.space")) return { kind: "huggingface", url: url.toString().replace(/\/$/, ""), token: runtime.HUGGINGFACE_TOKEN?.trim() };
+    } catch { /* try the self-hosted gateway */ }
+  }
   const raw = runtime.RECONSTRUCTION_API_URL?.trim().replace(/\/$/, "");
   if (!raw) return null;
   try {
     const url = new URL(raw);
     if (url.protocol !== "https:") return null;
-    return { url: url.toString().replace(/\/$/, ""), token: runtime.RECONSTRUCTION_API_TOKEN?.trim() };
+    return { kind: "gateway", url: url.toString().replace(/\/$/, ""), token: runtime.RECONSTRUCTION_API_TOKEN?.trim() };
   } catch { return null; }
 }
 
@@ -54,7 +62,7 @@ export async function POST(request: Request) {
     if (!images.length || busy.has(product.id)) { skipped += 1; continue; }
     const blocked = !configured || blockedBySource;
     const errorCode = !configured ? "service_not_configured" : blockedBySource ? "source_unavailable" : null;
-    const message = !configured ? "Подключите собственный сервер генерации 3D" : blockedBySource ? "Источник фотографий недоступен по HTTPS" : null;
+    const message = !configured ? "Подключите Hugging Face ZeroGPU или собственный 3D-сервер" : blockedBySource ? "Источник фотографий недоступен по HTTPS" : null;
     await db.insert(generationJobs).values({ id: crypto.randomUUID(), shopId: access.shop.id, productId: product.id, status: blocked ? "blocked" : "queued", priority: Math.max(1, 100 - ids.indexOf(product.id)), sourceImages: JSON.stringify(images), errorCode, errorMessage: message });
     await db.insert(productModels).values({ productId: product.id, status: blocked ? "missing" : "queued", sourceType: "website_photo", validationMessage: message ?? "Фотографии приняты в очередь генерации", updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: productModels.productId, set: { status: blocked ? "missing" : "queued", sourceType: "website_photo", validationMessage: message ?? "Фотографии приняты в очередь генерации", updatedAt: new Date().toISOString() } });
     created += 1;
@@ -71,9 +79,7 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
   for (const { job, product } of rows) {
     try {
       if (job.status === "processing" && job.externalJobId) {
-        const result = await fetch(`${config.url}/v1/assets/${encodeURIComponent(job.externalJobId)}`, { headers: headers(config.token) });
-        if (!result.ok) throw new Error(`status_${result.status}`);
-        const state = await result.json() as { status?: string; model_url?: string; error?: string };
+        const state = await pollGeneration(config, job.externalJobId);
         if (state.status === "ready" && state.model_url) { await storeGeneratedModel(shop.id, product.id, job.id, config, state.model_url); completed += 1; }
         else if (state.status === "failed") throw new Error(state.error || "generation_failed");
         continue;
@@ -85,11 +91,8 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
       const source = await fetch(imageUrl);
       if (!source.ok) throw new Error(`source_${source.status}`);
       const bytes = await source.arrayBuffer(); if (bytes.byteLength < 100 || bytes.byteLength > 20_000_000) throw new Error("invalid_source_size");
-      const form = new FormData(); form.append("file", new File([bytes], `${product.sku}.jpg`, { type: source.headers.get("content-type") || "image/jpeg" })); form.append("kind", "object");
-      const response = await fetch(`${config.url}/v1/assets`, { method: "POST", headers: headers(config.token), body: form });
-      if (!response.ok) throw new Error(`submit_${response.status}`);
-      const result = await response.json() as { id?: string }; if (!result.id) throw new Error("invalid_service_response");
-      await db.update(generationJobs).set({ status: "processing", externalJobId: result.id, updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
+      const externalJobId = await submitGeneration(config, new File([bytes], `${product.sku}.jpg`, { type: source.headers.get("content-type") || "image/jpeg" }));
+      await db.update(generationJobs).set({ status: "processing", externalJobId, updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
       await db.update(productModels).set({ status: "processing", validationMessage: "3D-модель создаётся", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); submitted += 1;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message.slice(0, 300) : "generation_failed";
@@ -103,7 +106,46 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
 
 function sameHost(imageUrl: string, websiteUrl: string | null) { try { return Boolean(websiteUrl) && new URL(imageUrl).hostname === new URL(websiteUrl!).hostname; } catch { return false; } }
 
-async function storeGeneratedModel(shopId: number, productId: number, jobId: string, config: { url: string; token?: string }, modelUrl: string) {
+async function submitGeneration(config: ServiceConfig, file: File) {
+  if (config.kind === "gateway") {
+    const form = new FormData(); form.append("file", file); form.append("kind", "object");
+    const response = await fetch(`${config.url}/v1/assets`, { method: "POST", headers: headers(config.token), body: form });
+    if (!response.ok) throw new Error(`submit_${response.status}`);
+    const result = await response.json() as { id?: string }; if (!result.id) throw new Error("invalid_service_response"); return result.id;
+  }
+  const upload = new FormData(); upload.append("files", file);
+  const uploaded = await fetch(`${config.url}/upload`, { method: "POST", headers: headers(config.token), body: upload });
+  if (!uploaded.ok) throw new Error(`hf_upload_${uploaded.status}`);
+  const paths = await uploaded.json() as string[]; if (!paths[0]) throw new Error("hf_upload_invalid");
+  const image = { path: paths[0], orig_name: file.name, mime_type: file.type, meta: { _type: "gradio.FileData" } };
+  const auth = headers(config.token) ?? {};
+  const response = await fetch(`${config.url}/call/generation_all`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ data: ["", image, null, null, null, null, 5, 5, 1234, 256, true, 8000, true] }) });
+  if (!response.ok) throw new Error(`hf_submit_${response.status}`);
+  const result = await response.json() as { event_id?: string }; if (!result.event_id) throw new Error("hf_submit_invalid"); return result.event_id;
+}
+
+async function pollGeneration(config: ServiceConfig, externalJobId: string): Promise<{ status?: string; model_url?: string; error?: string }> {
+  if (config.kind === "gateway") {
+    const result = await fetch(`${config.url}/v1/assets/${encodeURIComponent(externalJobId)}`, { headers: headers(config.token) });
+    if (!result.ok) throw new Error(`status_${result.status}`);
+    return result.json();
+  }
+  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12_000); let payload = "";
+  try {
+    const response = await fetch(`${config.url}/call/generation_all/${encodeURIComponent(externalJobId)}`, { headers: { ...(headers(config.token) ?? {}), accept: "text/event-stream" }, signal: controller.signal });
+    if (!response.ok) throw new Error(`hf_status_${response.status}`);
+    const reader = response.body?.getReader(); const decoder = new TextDecoder();
+    while (reader) { const next = await reader.read(); if (next.done) break; payload += decoder.decode(next.value, { stream: true }); if (payload.includes("event: complete") || payload.includes("event: error")) break; }
+  } catch (cause) { if (!(cause instanceof DOMException && cause.name === "AbortError")) throw cause; }
+  finally { clearTimeout(timeout); }
+  if (payload.includes("event: error")) return { status: "failed", error: "Hugging Face generation failed" };
+  const complete = [...payload.matchAll(/event: complete\s+data: (.+)/g)].at(-1)?.[1];
+  if (!complete) return { status: "processing" };
+  const data = JSON.parse(complete) as Array<{ url?: string; path?: string } | null>;
+  const model = data[1] ?? data[0]; return model?.url || model?.path ? { status: "ready", model_url: model.url ?? model.path } : { status: "failed", error: "Space did not return a GLB file" };
+}
+
+async function storeGeneratedModel(shopId: number, productId: number, jobId: string, config: ServiceConfig, modelUrl: string) {
   const resolved = new URL(modelUrl, `${config.url}/`).toString();
   if (!resolved.startsWith(`${config.url}/`)) throw new Error("invalid_model_url");
   const response = await fetch(resolved, { headers: headers(config.token) }); if (!response.ok) throw new Error(`model_${response.status}`);
