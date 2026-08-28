@@ -80,7 +80,7 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
   let submitted = 0; let completed = 0; let failed = 0;
   for (const { job, product } of rows) {
     try {
-      if (job.status === "processing" && job.externalJobId) {
+      if (["processing", "queued"].includes(job.status) && job.externalJobId) {
         const state = await pollGeneration(config, job.externalJobId);
         if (state.status === "ready" && state.model_url) { await storeGeneratedModel(shop.id, product.id, job.id, config, state.model_url, state.textured !== false); completed += 1; }
         else if (state.status === "failed" && config.kind === "huggingface" && hfJob(job.externalJobId).operation === "generation_all") {
@@ -92,13 +92,15 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
         continue;
       }
       await db.update(generationJobs).set({ status: "submitting", attempt: job.attempt + 1, startedAt: job.startedAt ?? new Date().toISOString(), updatedAt: new Date().toISOString(), errorCode: null, errorMessage: null }).where(eq(generationJobs.id, job.id));
-      const externalJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin);
+      const operation: HfOperation = config.kind === "huggingface" && job.errorCode === "texture_fallback" ? "shape_generation" : "generation_all";
+      const externalJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin, operation);
       await db.update(generationJobs).set({ status: "processing", externalJobId, updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
       await db.update(productModels).set({ status: "processing", validationMessage: "3D-модель создаётся", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); submitted += 1;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message.slice(0, 300) : "generation_failed";
       const retry = job.attempt + 1 < job.maxAttempts;
-      await db.update(generationJobs).set({ status: retry ? "queued" : "failed", errorCode: "generation_failed", errorMessage: message, updatedAt: new Date().toISOString(), completedAt: retry ? null : new Date().toISOString() }).where(eq(generationJobs.id, job.id));
+      const shapeFallback = config.kind === "huggingface" && Boolean(job.externalJobId) && hfJob(job.externalJobId!).operation === "shape_generation";
+      await db.update(generationJobs).set({ status: retry ? "queued" : "failed", externalJobId: retry ? null : job.externalJobId, errorCode: shapeFallback && retry ? "texture_fallback" : "generation_failed", errorMessage: message, updatedAt: new Date().toISOString(), completedAt: retry ? null : new Date().toISOString() }).where(eq(generationJobs.id, job.id));
       await db.update(productModels).set({ status: retry ? "queued" : "failed", validationMessage: retry ? "Повторим попытку автоматически" : "Не удалось создать модель", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); failed += 1;
     }
   }
@@ -142,6 +144,16 @@ function hfJob(externalJobId: string): { operation: HfOperation; eventId: string
   return { operation: candidate === "shape_generation" ? "shape_generation" : "generation_all", eventId: externalJobId.slice(separator + 1) };
 }
 
+function findGlb(value: unknown): { url?: string; path?: string } | null {
+  if (typeof value === "string") return /\.glb(?:$|[?#])/i.test(value) ? { url: value } : null;
+  if (Array.isArray(value)) { for (const item of value) { const found = findGlb(item); if (found) return found; } return null; }
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  for (const key of ["url", "path"] as const) if (typeof record[key] === "string" && /\.glb(?:$|[?#])/i.test(record[key])) return { [key]: record[key] };
+  for (const nested of Object.values(record)) { const found = findGlb(nested); if (found) return found; }
+  return null;
+}
+
 async function pollGeneration(config: ServiceConfig, externalJobId: string): Promise<GenerationState> {
   if (config.kind === "gateway") {
     const result = await fetch(`${config.url}/v1/assets/${encodeURIComponent(externalJobId)}`, { headers: headers(config.token) });
@@ -160,8 +172,8 @@ async function pollGeneration(config: ServiceConfig, externalJobId: string): Pro
   if (payload.includes("event: error")) return { status: "failed", error: `Hugging Face ${job.operation} failed` };
   const complete = [...payload.matchAll(/event: complete\s+data: (.+)/g)].at(-1)?.[1];
   if (!complete) return { status: "processing" };
-  const data = JSON.parse(complete) as Array<{ url?: string; path?: string } | null>;
-  const model = job.operation === "generation_all" ? (data[1] ?? data[0]) : data[0];
+  const data = JSON.parse(complete) as unknown[];
+  const model = job.operation === "generation_all" ? (findGlb(data[1]) ?? findGlb(data)) : (findGlb(data[0]) ?? findGlb(data));
   return model?.url || model?.path ? { status: "ready", model_url: model.url ?? model.path, textured: job.operation === "generation_all" } : { status: "failed", error: "Space did not return a GLB file" };
 }
 
