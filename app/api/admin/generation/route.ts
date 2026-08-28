@@ -145,7 +145,14 @@ function hfJob(externalJobId: string): { operation: HfOperation; eventId: string
 }
 
 function findGlb(value: unknown): { url?: string; path?: string } | null {
-  if (typeof value === "string") return /\.glb(?:$|[?#])/i.test(value) ? { url: value } : null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^[\[{]/.test(trimmed)) { try { return findGlb(JSON.parse(trimmed)); } catch { /* inspect it as plain text */ } }
+    const absolute = trimmed.match(/https?:\/\/[^"'\\\s]+\.glb(?:\?[^"'\\\s]*)?/i)?.[0];
+    if (absolute) return { url: absolute };
+    const path = trimmed.match(/\/tmp\/[^"'\\\s]+\.glb/i)?.[0];
+    return path ? { path } : null;
+  }
   if (Array.isArray(value)) { for (const item of value) { const found = findGlb(item); if (found) return found; } return null; }
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -178,10 +185,18 @@ async function pollGeneration(config: ServiceConfig, externalJobId: string): Pro
 }
 
 async function storeGeneratedModel(shopId: number, productId: number, jobId: string, config: ServiceConfig, modelUrl: string, textured: boolean) {
-  const resolved = new URL(modelUrl, `${config.url}/`).toString();
-  if (!resolved.startsWith(`${config.url}/`)) throw new Error("invalid_model_url");
-  const response = await fetch(resolved, { headers: headers(config.token) }); if (!response.ok) throw new Error(`model_${response.status}`);
-  const bytes = await response.arrayBuffer(); if (bytes.byteLength < 100 || bytes.byteLength > 50_000_000) throw new Error("invalid_model_size");
+  let decoded = modelUrl; try { decoded = decodeURIComponent(modelUrl); } catch { /* keep original */ }
+  const filePath = decoded.match(/\/tmp\/[^"'\\\s]+\.glb/i)?.[0];
+  const candidates = [new URL(modelUrl, `${config.url}/`).toString()];
+  if (filePath) candidates.push(`${config.url}/file=${filePath}`, `${config.url}/gradio_api/file=${filePath}`, `${config.url}/call/${textured ? "all" : "shape"}/file=${filePath}`);
+  let bytes: ArrayBuffer | null = null; const statuses: number[] = [];
+  for (const resolved of [...new Set(candidates)]) {
+    if (!resolved.startsWith(`${config.url}/`)) continue;
+    const response = await fetch(resolved, { headers: headers(config.token) }); statuses.push(response.status);
+    if (response.ok) { bytes = await response.arrayBuffer(); break; }
+  }
+  if (!bytes) throw new Error(`model_${statuses.join("_") || "unavailable"}`);
+  if (bytes.byteLength < 100 || bytes.byteLength > 50_000_000) throw new Error("invalid_model_size");
   const id = crypto.randomUUID(); const storageKey = `shops/${shopId}/products/${productId}/${id}.glb`;
   await getUploadsBucket().put(storageKey, bytes, { httpMetadata: { contentType: "model/gltf-binary" } });
   const db = getDb();

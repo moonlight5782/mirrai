@@ -57,6 +57,13 @@
       "when": 1787998800000,
       "tag": "0007_retry_hugge_alba_shape",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788000600000,
+      "tag": "0008_retry_hugge_alba_download",
+      "breakpoints": true
     }
   ]
 }

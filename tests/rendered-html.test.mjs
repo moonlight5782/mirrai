@@ -144,12 +144,13 @@ test("HUGGE pilot imports website photos and installs automatically on OpenCart"
 });
 
 test("batch 3D generation is durable and never publishes unreviewed models", async () => {
-  const [schema, migration, cachedSource, restoredJob, shapeRetry, route, catalog] = await Promise.all([
+  const [schema, migration, cachedSource, restoredJob, shapeRetry, downloadRetry, route, catalog] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0004_early_legion.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0005_cached_hugge_alba.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0006_restore_hugge_alba_job.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0007_retry_hugge_alba_shape.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0008_retry_hugge_alba_download.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/generation/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/catalog/catalog-admin.tsx", import.meta.url), "utf8"),
   ]);
@@ -157,5 +158,6 @@ test("batch 3D generation is durable and never publishes unreviewed models", asy
   assert.match(cachedSource, /catalog-sources\/hugge-md\/alba-89990-1\.jpg/); assert.match(cachedSource, /`status`='queued'/); assert.match(route, /config\.kind === "huggingface" \? 1 : 3/); assert.match(route, /sameHost\(imageUrl, appOrigin\)/);
   assert.match(restoredJob, /INSERT OR IGNORE INTO `generation_jobs`/); assert.match(restoredJob, /hugge-alba-89990/);
   assert.match(shapeRetry, /`error_code`='texture_fallback'/); assert.match(route, /function findGlb/); assert.match(route, /findGlb\(data\[1\]\)/);
+  assert.match(downloadRetry, /Gradio file proxy/); assert.match(route, /gradio_api\/file=/); assert.match(route, /call\/\$\{textured \? "all" : "shape"\}\/file=/);
   assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
 });
