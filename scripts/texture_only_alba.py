@@ -37,7 +37,7 @@ def fabric_maps(size: int = 1024) -> tuple[Image.Image, Image.Image, Image.Image
 
 
 def unwrap(mesh: trimesh.Trimesh, material: trimesh.visual.material.Material) -> trimesh.Trimesh:
-    """Fast box projection that preserves the reconstructed mesh byte-for-byte.
+    """Add UVs without moving vertices or changing faces.
 
     A dense 402k triangle reconstruction does not need an expensive atlas for a
     directionless velvet weave. Dominant-normal projection avoids stretching on
@@ -58,65 +58,21 @@ def unwrap(mesh: trimesh.Trimesh, material: trimesh.visual.material.Material) ->
     return mesh
 
 
-def clean_steel_frame(material: trimesh.visual.material.Material) -> trimesh.Trimesh:
-    """Build the simple welded tube frame visible in the three product photos."""
-    paths: list[list[tuple[float, float, float]]] = []
-    for x in (-0.62, 0.62):
-        paths.append([
-            (x, -0.30, -0.16),
-            (x, -0.94, -0.77),
-            (x, -0.94, 0.67),
-            (x, -0.31, 0.54),
-        ])
-    paths.extend([
-        [(-0.62, -0.91, -0.70), (0.62, -0.91, 0.61)],
-        [(0.62, -0.91, -0.70), (-0.62, -0.91, 0.61)],
-        [(-0.62, -0.94, 0.67), (0.62, -0.94, 0.67)],
-    ])
-    parts: list[trimesh.Trimesh] = []
-    for path in paths:
-        for start, end in zip(path, path[1:]):
-            parts.append(trimesh.creation.cylinder(radius=0.021, sections=20, segment=[start, end]))
-        for point in path[1:-1]:
-            joint = trimesh.creation.icosphere(subdivisions=2, radius=0.0225)
-            joint.apply_translation(point)
-            parts.append(joint)
-    frame = trimesh.util.concatenate(parts)
-    frame.visual = trimesh.visual.TextureVisuals(material=material)
-    return frame
-
-
 def main() -> None:
     source, destination = map(Path, sys.argv[1:3])
     mesh = trimesh.load(source, force="mesh", process=False)
     source_bounds = mesh.bounds.copy()
-
-    # The generated file contains a two-triangle parasite attached through a
-    # non-manifold edge. Keeping only the 402k-face body removes that defect.
-    components = mesh.split(only_watertight=False)
-    mesh = max(components, key=lambda part: len(part.faces))
-    mesh.update_faces(mesh.nondegenerate_faces(height=1e-10))
-    mesh.remove_unreferenced_vertices()
-    mesh.fix_normals(multibody=True)
-
-    edge_use = np.bincount(mesh.edges_unique_inverse)
-    if not mesh.is_watertight or np.any(edge_use != 2):
-        raise RuntimeError("Topology repair failed: output must be closed and manifold")
-    if not np.allclose(source_bounds, mesh.bounds, atol=2e-4):
-        raise RuntimeError("Repair changed the product silhouette")
+    source_vertices = len(mesh.vertices)
+    source_faces = len(mesh.faces)
 
     face_centres = mesh.triangles_center
-    # In the reconstruction Y is vertical. Everything clearly below the soft
-    # seat shell is the welded black steel frame.
-    # Never cut into the soft shell: mobile side/underside views expose even a
-    # small missing band. Only discard geometry clearly below the upholstered
-    # seat, where the damaged reconstructed legs live. The replacement tubes
-    # overlap this cut at their mounting points.
-    metal_mask = face_centres[:, 1] < -0.44
+    # Material assignment only: every original face goes to exactly one output
+    # primitive. No geometry is removed, repaired, remeshed or regenerated.
+    metal_mask = face_centres[:, 1] < -0.285
     upholstery = mesh.submesh([np.flatnonzero(~metal_mask)], append=True, repair=False)
-    reconstructed_metal = mesh.submesh([np.flatnonzero(metal_mask)], append=True, repair=False)
-    if len(reconstructed_metal.faces) > 25_000:
-        raise RuntimeError("Frame cut reached the upholstered shell; refusing an output with side holes")
+    metal = mesh.submesh([np.flatnonzero(metal_mask)], append=True, repair=False)
+    if len(upholstery.faces) + len(metal.faces) != source_faces:
+        raise RuntimeError("Texture-only export lost source faces")
 
     base, normal, metallic_roughness = fabric_maps()
     fabric_material = trimesh.visual.material.PBRMaterial(
@@ -136,23 +92,25 @@ def main() -> None:
     )
 
     textured_upholstery = unwrap(upholstery, fabric_material)
-    metal = clean_steel_frame(metal_material)
+    metal.visual = trimesh.visual.TextureVisuals(material=metal_material)
     scene = trimesh.Scene()
     scene.add_geometry(textured_upholstery, node_name="Alba upholstery", geom_name="Alba upholstery")
-    scene.add_geometry(metal, node_name="Alba steel frame", geom_name="Alba steel frame")
+    scene.add_geometry(metal, node_name="Alba original steel frame", geom_name="Alba original steel frame")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(scene.export(file_type="glb"))
+    output_bounds = np.vstack((textured_upholstery.bounds, metal.bounds))
+    bounds_preserved = np.allclose(source_bounds[0], output_bounds.min(axis=0), atol=1e-7) and np.allclose(source_bounds[1], output_bounds.max(axis=0), atol=1e-7)
+    if not bounds_preserved:
+        raise RuntimeError("Texture-only export changed source bounds")
     print({
         "output": str(destination),
-        "source_vertices": 201125,
-        "repaired_vertices": len(mesh.vertices),
-        "repaired_faces": len(mesh.faces),
+        "source_vertices": source_vertices,
+        "source_faces": source_faces,
+        "output_faces": len(upholstery.faces) + len(metal.faces),
         "upholstery_faces": len(upholstery.faces),
         "metal_faces": len(metal.faces),
-        "replaced_reconstruction_frame_faces": len(reconstructed_metal.faces),
-        "shell_cut_guard": "passed",
-        "watertight": mesh.is_watertight,
-        "bounds_preserved": bool(np.allclose(source_bounds, mesh.bounds, atol=2e-4)),
+        "geometry_changed": False,
+        "bounds_preserved": bool(bounds_preserved),
     })
 
 
