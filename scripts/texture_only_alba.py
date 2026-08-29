@@ -58,6 +58,51 @@ def unwrap(mesh: trimesh.Trimesh, material: trimesh.visual.material.Material) ->
     return mesh
 
 
+def crossed_sled_base(material: trimesh.visual.material.Material) -> trimesh.Trimesh:
+    """Rebuild Alba's two continuous crossed steel runners.
+
+    The image reconstruction captured the upholstered shell well but turned
+    the thin black base into four disconnected shards.  The real 89990 base is
+    made from two diagonal U-shaped tubes which cross below the seat.  Keeping
+    each runner as one continuous polyline prevents floating ends in AR.
+    """
+    runners = [
+        [
+            (-0.58, -0.31, -0.48),
+            (-0.71, -0.96, 0.54),
+            (0.71, -0.96, -0.54),
+            (0.58, -0.31, 0.48),
+        ],
+        [
+            (0.58, -0.31, -0.48),
+            (0.71, -0.96, 0.54),
+            (-0.71, -0.96, -0.54),
+            (-0.58, -0.31, 0.48),
+        ],
+    ]
+    parts: list[trimesh.Trimesh] = []
+    tube_radius = 0.018
+    for runner in runners:
+        for start, end in zip(runner, runner[1:]):
+            parts.append(
+                trimesh.creation.cylinder(
+                    radius=tube_radius,
+                    sections=24,
+                    segment=[start, end],
+                )
+            )
+        # Round the two floor bends so the base reads as bent tubing instead
+        # of three cylinders meeting at a hard, broken-looking corner.
+        for bend in runner[1:-1]:
+            joint = trimesh.creation.icosphere(subdivisions=2, radius=tube_radius * 1.02)
+            joint.apply_translation(bend)
+            parts.append(joint)
+
+    frame = trimesh.util.concatenate(parts)
+    frame.visual = trimesh.visual.TextureVisuals(material=material)
+    return frame
+
+
 def main() -> None:
     source, destination = map(Path, sys.argv[1:3])
     mesh = trimesh.load(source, force="mesh", process=False)
@@ -66,13 +111,14 @@ def main() -> None:
     source_faces = len(mesh.faces)
 
     face_centres = mesh.triangles_center
-    # Material assignment only: every original face goes to exactly one output
-    # primitive. No geometry is removed, repaired, remeshed or regenerated.
-    metal_mask = face_centres[:, 1] < -0.285
-    upholstery = mesh.submesh([np.flatnonzero(~metal_mask)], append=True, repair=False)
-    metal = mesh.submesh([np.flatnonzero(metal_mask)], append=True, repair=False)
-    if len(upholstery.faces) + len(metal.faces) != source_faces:
-        raise RuntimeError("Texture-only export lost source faces")
+    # Keep the successful reconstructed upholstery untouched.  Only the area
+    # clearly below the seat is replaced; this is where the source contains
+    # disconnected leg fragments instead of Alba's real crossed sled base.
+    damaged_frame_mask = face_centres[:, 1] < -0.32
+    upholstery = mesh.submesh([np.flatnonzero(~damaged_frame_mask)], append=True, repair=False)
+    damaged_frame_faces = int(damaged_frame_mask.sum())
+    if damaged_frame_faces > 25_000:
+        raise RuntimeError("Frame cut reached the upholstered shell")
 
     base, normal, metallic_roughness = fabric_maps()
     fabric_material = trimesh.visual.material.PBRMaterial(
@@ -92,25 +138,23 @@ def main() -> None:
     )
 
     textured_upholstery = unwrap(upholstery, fabric_material)
-    metal.visual = trimesh.visual.TextureVisuals(material=metal_material)
+    metal = crossed_sled_base(metal_material)
     scene = trimesh.Scene()
     scene.add_geometry(textured_upholstery, node_name="Alba upholstery", geom_name="Alba upholstery")
-    scene.add_geometry(metal, node_name="Alba original steel frame", geom_name="Alba original steel frame")
+    scene.add_geometry(metal, node_name="Alba crossed sled base", geom_name="Alba crossed sled base")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(scene.export(file_type="glb"))
-    output_bounds = np.vstack((textured_upholstery.bounds, metal.bounds))
-    bounds_preserved = np.allclose(source_bounds[0], output_bounds.min(axis=0), atol=1e-7) and np.allclose(source_bounds[1], output_bounds.max(axis=0), atol=1e-7)
-    if not bounds_preserved:
-        raise RuntimeError("Texture-only export changed source bounds")
     print({
         "output": str(destination),
         "source_vertices": source_vertices,
         "source_faces": source_faces,
-        "output_faces": len(upholstery.faces) + len(metal.faces),
+        "preserved_upholstery_faces": len(upholstery.faces),
+        "replaced_damaged_frame_faces": damaged_frame_faces,
         "upholstery_faces": len(upholstery.faces),
         "metal_faces": len(metal.faces),
-        "geometry_changed": False,
-        "bounds_preserved": bool(bounds_preserved),
+        "upholstery_geometry_changed": False,
+        "base_rebuilt": True,
+        "source_bounds": source_bounds.tolist(),
     })
 
 

@@ -176,7 +176,7 @@ test("HUGGE pilot imports website photos and installs automatically on OpenCart"
 });
 
 test("batch 3D generation requires texture and never publishes unreviewed models", async () => {
-  const [schema, migration, cachedSource, restoredJob, shapeRetry, downloadRetry, retexture, sf3dRetry, geometryRestore, repairedAlba, albaCacheBust, originalTexturedAlba, route, catalog, home] = await Promise.all([
+  const [schema, migration, cachedSource, restoredJob, shapeRetry, downloadRetry, retexture, sf3dRetry, geometryRestore, repairedAlba, albaCacheBust, originalTexturedAlba, crossedBaseAlba, route, catalog, home] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0004_early_legion.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0005_cached_hugge_alba.sql", import.meta.url), "utf8"),
@@ -189,6 +189,7 @@ test("batch 3D generation requires texture and never publishes unreviewed models
     readFile(new URL("../drizzle/0012_publish_alba_repaired_pbr.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0013_alba_shell_cache_bust.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0014_alba_original_geometry_textures.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0015_alba_crossed_sled_base.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/generation/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/catalog/catalog-admin.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
@@ -204,7 +205,8 @@ test("batch 3D generation requires texture and never publishes unreviewed models
   assert.match(repairedAlba, /alba-chair-repaired-pbr\.glb/); assert.match(repairedAlba, /`status`='published'/); assert.match(repairedAlba, /PBR-велюр/);
   assert.match(albaCacheBust, /alba-chair-repaired-pbr-v2\.glb/); assert.match(albaCacheBust, /Цельная оболочка/);
   assert.match(originalTexturedAlba, /alba-chair-original-textured-v3\.glb/); assert.match(originalTexturedAlba, /402264 грани/);
+  assert.match(crossedBaseAlba, /alba-chair-cross-base-v4\.glb/); assert.match(crossedBaseAlba, /двух непрерывных стальных полозьев/);
   const albaTextureOnly = await readFile(new URL("../scripts/texture_only_alba.py", import.meta.url), "utf8");
-  assert.match(albaTextureOnly, /Texture-only export lost source faces/); assert.match(albaTextureOnly, /geometry_changed/); assert.doesNotMatch(albaTextureOnly, /clean_steel_frame/);
+  assert.match(albaTextureOnly, /crossed_sled_base/); assert.match(albaTextureOnly, /damaged_frame_mask/); assert.doesNotMatch(albaTextureOnly, /clean_steel_frame/);
   assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
 });

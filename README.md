@@ -127,7 +127,7 @@ The admin catalog now has a durable batch queue. An operator selects products wi
 
 Four HUGGE products are preloaded as the first batch: Alba HUGGE-89990, Ria HUGGE-109553, Ria HUGGE-107376 and Blackburn HUGGE-100326. Alba is the first published pilot model: its original detailed geometry is retained exactly, while UVs, normals and separate velvet/metal PBR materials are added without remeshing or replacement geometry. The other products remain visibly blocked—not falsely complete—until verified models are available.
 
-The reproducible Alba texture-only pipeline is in `scripts/texture_only_alba.py`. Create a Python 3.12 environment, install `scripts/requirements-mesh.txt`, then pass the original GLB and an output path. The script rejects the export if the original face count or bounds change.
+The reproducible Alba repair pipeline is in `scripts/texture_only_alba.py`. It preserves the successful reconstructed upholstery, adds the VIC velvet PBR maps, removes only the disconnected leg fragments below the seat, and rebuilds the product's crossed sled base as two continuous steel runners. Create a Python 3.12 environment, install `scripts/requirements-mesh.txt`, then pass the original GLB and an output path. The script refuses a cut that reaches the upholstered shell.
 
 For a no-cost pilot, MIRRAI can also submit jobs to a duplicated Hugging Face ZeroGPU Gradio Space through `HUGGINGFACE_SPACE_URL`. The exact nontechnical setup is documented in [`integrations/huggingface-space`](integrations/huggingface-space/README.md).
 
