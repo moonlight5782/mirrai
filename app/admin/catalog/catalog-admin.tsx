@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminNavigation } from "../admin-navigation";
 
 type ModelStatus = "missing" | "queued" | "processing" | "review" | "ready" | "published" | "failed";
 type CatalogItem = { id: number; sku: string; name: string; category: string; price: string; material: string; widthCm: number | null; heightCm: number | null; depthCm: number | null; sourceUrl: string | null; imageUrls: string[]; sourceUpdatedAt: string | null; model: { status: ModelStatus; glbUrl: string | null; usdzUrl: string | null; validationMessage: string | null; qualityScore: number | null } };
@@ -11,7 +11,7 @@ type GenerationData = { serviceConfigured: boolean; items: { job: { id: string; 
 const statusLabels: Record<ModelStatus, string> = { missing: "Нет модели", queued: "В очереди", processing: "Создаётся", review: "Нужна проверка", ready: "Готова", published: "Опубликована", failed: "Ошибка" };
 const filterOptions = [{ value: "all", label: "Все" }, { value: "published", label: "Опубликованы" }, { value: "processing", label: "В работе" }, { value: "review", label: "На проверке" }, { value: "missing", label: "Без модели" }, { value: "failed", label: "Ошибки" }];
 
-export function CatalogAdmin({ displayName }: { displayName: string }) {
+export function CatalogAdmin({ displayName, shopSlug }: { displayName: string; shopSlug: string }) {
   const [data, setData] = useState<CatalogData | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
@@ -25,7 +25,6 @@ export function CatalogAdmin({ displayName }: { displayName: string }) {
   const [generation, setGeneration] = useState<GenerationData | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [queueing, setQueueing] = useState(false);
-  const [shopSlug] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("shop") ?? "");
 
   const load = useCallback(async () => {
     try { const response = await fetch(`/api/admin/catalog${shopSlug ? `?shop=${encodeURIComponent(shopSlug)}` : ""}`); if (!response.ok) throw new Error(); const catalog = await response.json() as CatalogData; setData(catalog); setSelected(current => current.size ? current : new Set(catalog.items.filter(item => item.imageUrls.length && item.widthCm && item.heightCm).slice(0, 4).map(item => item.id))); const jobs = await fetch(`/api/admin/generation${shopSlug ? `?shop=${encodeURIComponent(shopSlug)}` : ""}`); if (jobs.ok) setGeneration(await jobs.json()); setError(""); }
@@ -53,9 +52,9 @@ export function CatalogAdmin({ displayName }: { displayName: string }) {
   async function generationAction(action: "enqueue" | "run") { if (!data || queueing) return; setQueueing(true); setError(""); const response = await fetch("/api/admin/generation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shop: data.shop.slug, action, productIds: [...selected] }) }); const result = await response.json().catch(() => ({})); if (!response.ok) setError(result.error === "service_not_configured" ? "Очередь готова. Для запуска подключите Hugging Face ZeroGPU или собственный 3D-сервер." : "Не удалось обновить очередь генерации."); else if (result.blocked) setError("Товары добавлены, но запуск заблокирован: продлите сертификат hugge.md и подключите ZeroGPU."); setQueueing(false); await load(); }
 
   return <main className="admin-shell">
-    <aside className="admin-sidebar"><Link href="/" className="admin-brand">MIRR<span>AI</span></Link><nav><b>Управление</b><Link href="/admin/clients">Клиенты</Link><Link href={`/admin/setup${shopSlug ? `?shop=${shopSlug}` : ""}`}>Мастер установки</Link><a className="active" href="#catalog">Каталог моделей</a><Link href={`/admin/analytics${shopSlug ? `?shop=${shopSlug}` : ""}`}>Аналитика</Link><b>Магазин</b><Link href={`/admin/setup${shopSlug ? `?shop=${shopSlug}` : ""}`}>Интеграция</Link><a href="#subscription">Подписка</a></nav><div><small>Администратор</small><span>{displayName}</span></div></aside>
+    <AdminNavigation active="catalog" displayName={displayName} shopSlug={shopSlug}/>
     <section className="admin-main" id="catalog">
-      <header className="admin-head"><div><p>КАТАЛОГ / 3D-ПОКРЫТИЕ</p><h1>Модели товаров</h1></div><div className="admin-head-actions">{data?.shop.catalogSourceType === "sitemap" && <button className="admin-primary" disabled={syncing} onClick={() => void syncCatalog()}>{syncing ? "Синхронизируем…" : "Обновить с сайта"}</button>}<a href="/mirrai-catalog-template.csv" download>Шаблон CSV</a><label className="admin-primary">{importing ? "Импортируем…" : "Импорт CSV"}<input type="file" accept=".csv,text/csv" disabled={importing} onChange={event => void importCatalog(event.target.files?.[0])}/></label><Link href="/demo-store">Открыть демо ↗</Link></div></header>
+      <header className="admin-head"><div><p>КАТАЛОГ / 3D-ПОКРЫТИЕ</p><h1>Модели товаров</h1></div><div className="admin-head-actions">{data?.shop.catalogSourceType === "sitemap" && <button className="admin-primary" disabled={syncing} onClick={() => void syncCatalog()}>{syncing ? "Синхронизируем…" : "Обновить с сайта"}</button>}<a href="/mirrai-catalog-template.csv" download>Шаблон CSV</a><label className="admin-primary">{importing ? "Импортируем…" : "Импорт CSV"}<input type="file" accept=".csv,text/csv" disabled={importing} onChange={event => void importCatalog(event.target.files?.[0])}/></label><a href="/demo-store">Открыть демо ↗</a></div></header>
       {data ? <><div className="admin-shop"><div><i/><span><strong>{data.shop.name}</strong><small>shopId: {data.shop.slug} · {data.shop.catalogSyncMessage ?? "ручной каталог"}</small></span></div><b className={`subscription ${data.shop.catalogSyncStatus === "ready" ? "active" : data.shop.subscriptionStatus}`}>{data.shop.catalogSyncStatus === "blocked" ? "Источник недоступен" : data.shop.subscriptionStatus === "active" ? "Подписка активна" : data.shop.subscriptionStatus}</b></div>
       <div className="admin-stats"><article><span>Всего SKU</span><strong>{data.counts.total}</strong></article><article><span>Фото найдено</span><strong>{data.counts.withPhotos}</strong></article><article><span>Готовы к AR</span><strong>{data.counts.ready}</strong></article><article><span>В обработке</span><strong>{data.counts.processing}</strong></article><article><span>Без модели</span><strong>{data.counts.missing}</strong></article></div>
       <div className="coverage"><span><i style={{ width: `${data.counts.total ? data.counts.ready / data.counts.total * 100 : 0}%` }}/></span><p><strong>{data.counts.total ? Math.round(data.counts.ready / data.counts.total * 100) : 0}%</strong> каталога доступно покупателям в AR</p></div>

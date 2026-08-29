@@ -70,7 +70,7 @@ test("admin catalog is backed by durable model lifecycle data", async () => {
 });
 
 test("anonymous visitors get a working admin entry instead of an auth redirect", async () => {
-  for (const path of ["/admin/clients", "/admin/catalog?shop=nordform", "/admin/analytics?shop=nordform", "/admin/setup?shop=nordform"]) {
+  for (const path of ["/admin/clients", "/admin/catalog?shop=nordform", "/admin/analytics?shop=nordform", "/admin/setup?shop=nordform", "/admin/subscription?shop=nordform"]) {
     const response = await render(path);
     assert.equal(response.status, 200);
     const html = await response.text();
@@ -81,6 +81,23 @@ test("anonymous visitors get a working admin entry instead of an auth redirect",
     assert.match(html, /Аналитика/i);
     assert.match(html, /Установка/i);
   }
+});
+
+test("navigation preserves shop context and furniture viewer URLs", async () => {
+  const [home, navigation, adminRoot, subscription] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/admin-navigation.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/subscription/subscription-admin.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(home, /history\.pushState/);
+  assert.match(home, /\.get\("product"\)/);
+  assert.match(home, /popstate/);
+  assert.match(navigation, /Активный магазин/);
+  assert.match(navigation, /admin\/subscription/);
+  assert.match(navigation, /encodeURIComponent\(shopSlug\)/);
+  assert.match(adminRoot, /redirect\("\/admin\/clients"\)/);
+  assert.match(subscription, /ТАРИФ И ДОСТУП/);
 });
 
 test("nontechnical setup wizard provides auto-scan installation and domain checks", async () => {

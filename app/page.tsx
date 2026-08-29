@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-html-link-for-pages -- viewer exit intentionally performs a full navigation */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
@@ -51,7 +52,17 @@ export default function Home() {
   useEffect(() => {
     import("@google/model-viewer");
     const params = new URLSearchParams(window.location.search);
-    if (params.get("widget") !== "1") return;
+    if (params.get("widget") !== "1") {
+      const openFromUrl = () => {
+        const productId = new URLSearchParams(window.location.search).get("product");
+        const index = products.findIndex(item => item.id === productId);
+        if (index >= 0) { setActive(index); setView("viewer"); }
+        else setView("landing");
+      };
+      openFromUrl();
+      window.addEventListener("popstate", openFromUrl);
+      return () => window.removeEventListener("popstate", openFromUrl);
+    }
     const base = products[0];
     const product: Product = {
       id: params.get("productId")?.slice(0, 80) || base.id,
@@ -92,7 +103,21 @@ export default function Home() {
     setCustomName(""); setCustomModel(""); setCustomPreview(""); setUploadState("idle"); setUploadMessage(""); setPhotoPending(false);
   }
 
-  function selectProduct(index: number) { resetCustomAsset(); setActive(index); setArStatus("Загружаем выбранную модель…"); }
+  function openViewer(index = 0) {
+    resetCustomAsset(); setActive(index); setView("viewer");
+    window.history.pushState({ mirraiViewer: true }, "", `/?product=${encodeURIComponent(products[index]?.id ?? products[0].id)}`);
+  }
+
+  function closeViewer() {
+    resetCustomAsset(); setView("landing");
+    if (window.history.state?.mirraiViewer) window.history.back();
+    else window.history.replaceState(null, "", "/");
+  }
+
+  function selectProduct(index: number) {
+    resetCustomAsset(); setActive(index); setArStatus("Загружаем выбранную модель…");
+    window.history.replaceState({ mirraiViewer: true }, "", `/?product=${encodeURIComponent(products[index]?.id ?? products[0].id)}`);
+  }
 
   useEffect(() => {
     if (view !== "viewer" || !arRef.current) return;
@@ -147,9 +172,9 @@ export default function Home() {
   if (isWidget && !subscriptionActive) return <main className="widget-fallback"><div><span>MIRRAI</span><p>Вы прекрасно выглядите в любой одежде.<br/>А ваша мебель — в любом интерьере.</p></div></main>;
 
   if (view === "viewer") return <main className={isWidget ? "widget-shell" : ""}>
-    {!isWidget && <nav className="nav shell"><button className="brand" onClick={() => setView("landing")}>MIRR<span>AI</span></button><div className="nav-links"><a href="#catalog">Каталог</a><a href="#business">Для магазинов</a></div><button className="nav-cta" onClick={() => setView("landing")}>На главную <span>↗</span></button></nav>}
+    {!isWidget && <nav className="nav shell"><a className="brand" href="/">MIRR<span>AI</span></a><div className="nav-links"><a href="/#catalog">Каталог</a><a href="/#business">Для магазинов</a></div><button className="nav-cta" onClick={closeViewer}>На главную <span>↗</span></button></nav>}
     <section className={`viewer ${isWidget ? "viewer-widget" : "shell"}`}>
-      <header className="viewer-head"><div>{!isWidget && <button className="back" onClick={() => setView("landing")}>← Назад</button>}<p>AR-просмотр · реальный масштаб</p><h1>{selected.name}</h1></div><div className="ready-pill"><i/> ГОТОВО К РАЗМЕЩЕНИЮ</div></header>
+      <header className="viewer-head"><div>{!isWidget && <button className="back" onClick={closeViewer}>← Назад</button>}<p>AR-просмотр · реальный масштаб</p><h1>{selected.name}</h1></div><div className="ready-pill"><i/> ГОТОВО К РАЗМЕЩЕНИЮ</div></header>
       <div className="viewer-grid">
         {!isWidget && <aside className="catalog-panel"><div className="panel-title"><span>Каталог</span><small>{catalog.length} модели</small></div>{catalog.map((item, index) => <button key={item.id} className={`product ${active === index && !customName ? "active" : ""}`} onClick={() => selectProduct(index)}><i style={{ background: item.color }}><b>▰</b></i><span><small>{item.category}</small><strong>{item.name}</strong><em>{item.price}</em></span><b className="select-mark">{active === index && !customName ? "✓" : "+"}</b></button>)}</aside>}
         <div className="ar-stage">
@@ -170,10 +195,10 @@ export default function Home() {
   </main>;
 
   return <main>
-    <nav className="nav shell"><button className="brand" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>MIRR<span>AI</span></button><div className="nav-links"><a href="#how">Как работает</a><a href="#catalog">Каталог</a><a href="#business">Для магазинов</a><a href="/admin">Администратор</a></div><button className="nav-cta" onClick={() => setView("viewer")}>Открыть демо <span>↗</span></button></nav>
-    <section className="hero shell"><div className="hero-copy"><p className="eyebrow"><i/> AR ДЛЯ МЕБЕЛЬНЫХ МАГАЗИНОВ</p><h1>Мебель —<br/><em>уже у вас.</em></h1><p className="lead">Покупатель открывает товар в реальном масштабе прямо из карточки магазина — с адаптацией света, оттенков и контактных теней.</p><button className="hero-cta" onClick={() => setView("viewer")}>Посмотреть кресло у себя <span>↗</span></button><div className="hero-proof"><span><b>1:1</b> точный масштаб</span><span><b>0</b> приложений</span><span><b>iOS + Android</b></span></div></div><button className="hero-visual" onClick={() => setView("viewer")} aria-label="Открыть интерактивное AR-превью кресла"><div className="hero-room"><i className="hero-window"/><i className="hero-rug"/><i className="hero-chair"><b/></i><span className="measure measure-x">84 см</span><span className="measure measure-y">76 см</span><span className="placement-ring"/></div><div className="visual-caption"><span>Кресло Cloud · Букле</span><b>Открыть AR ↗</b></div></button></section>
+    <nav className="nav shell"><a className="brand" href="#top">MIRR<span>AI</span></a><div className="nav-links"><a href="#how">Как работает</a><a href="#catalog">Каталог</a><a href="#business">Для магазинов</a><a href="/admin">Администратор</a></div><button className="nav-cta" onClick={() => openViewer(0)}>Открыть демо <span>↗</span></button></nav>
+    <section className="hero shell" id="top"><div className="hero-copy"><p className="eyebrow"><i/> AR ДЛЯ МЕБЕЛЬНЫХ МАГАЗИНОВ</p><h1>Мебель —<br/><em>уже у вас.</em></h1><p className="lead">Покупатель открывает товар в реальном масштабе прямо из карточки магазина — с адаптацией света, оттенков и контактных теней.</p><button className="hero-cta" onClick={() => openViewer(0)}>Посмотреть кресло у себя <span>↗</span></button><div className="hero-proof"><span><b>1:1</b> точный масштаб</span><span><b>0</b> приложений</span><span><b>iOS + Android</b></span></div></div><button className="hero-visual" onClick={() => openViewer(0)} aria-label="Открыть интерактивное AR-превью кресла"><div className="hero-room"><i className="hero-window"/><i className="hero-rug"/><i className="hero-chair"><b/></i><span className="measure measure-x">84 см</span><span className="measure measure-y">76 см</span><span className="placement-ring"/></div><div className="visual-caption"><span>Кресло Cloud · Букле</span><b>Открыть AR ↗</b></div></button></section>
     <section className="how shell" id="how"><p className="section-label">Из карточки товара — в комнату</p><h2>Не представляйте.<br/><em>Поставьте и посмотрите.</em></h2><div className="steps"><article><span>01</span><h3>Нажать в магазине</h3><p>Кнопка MIRRAI находится рядом с добавлением товара в корзину.</p></article><article><span>02</span><h3>Навести на пол</h3><p>Телефон определяет поверхность и реальный масштаб помещения.</p></article><article><span>03</span><h3>Принять решение</h3><p>Материалы, свет и тени помогают оценить товар до покупки.</p></article></div></section>
-    <section className="catalog-showcase shell" id="catalog"><div className="section-heading"><div><p className="section-label">Демонстрационный каталог</p><h2>Четыре товара.<br/><em>Один клик до комнаты.</em></h2></div><p>Каждая карточка хранит модель, материалы и реальные габариты. В магазине эти данные автоматически приходят из товарного каталога.</p></div><div className="showcase-grid">{products.map((item, index) => <button key={item.id} onClick={() => { setActive(index); setView("viewer"); }}><span className="showcase-object" style={{ background: item.color }}><i>{index === 2 ? "◯" : index === 3 ? "▰" : "●"}</i></span><small>{item.category}</small><strong>{item.name}</strong><em>{dimensionsLabel(item.dimensions)}</em><b>{item.price}</b></button>)}</div></section>
+    <section className="catalog-showcase shell" id="catalog"><div className="section-heading"><div><p className="section-label">Демонстрационный каталог</p><h2>Четыре товара.<br/><em>Один клик до комнаты.</em></h2></div><p>Каждая карточка хранит модель, материалы и реальные габариты. В магазине эти данные автоматически приходят из товарного каталога.</p></div><div className="showcase-grid">{products.map((item, index) => <button key={item.id} onClick={() => openViewer(index)}><span className="showcase-object" style={{ background: item.color }}><i>{index === 2 ? "◯" : index === 3 ? "▰" : "●"}</i></span><small>{item.category}</small><strong>{item.name}</strong><em>{dimensionsLabel(item.dimensions)}</em><b>{item.price}</b></button>)}</div></section>
     <section className="business shell" id="business"><div><p className="section-label">MIRRAI COMMERCE</p><h2>Сотни товаров.<br/><em>Без сотен ручных интеграций.</em></h2><a className="business-demo" href="/demo-store">Посмотреть виджет в магазине <span>↗</span></a></div><div className="pipeline"><article><b>01</b><span><strong>Импорт каталога</strong><small>SKU, размеры, варианты и готовые 3D-файлы</small></span></article><article><b>02</b><span><strong>Подготовка моделей</strong><small>GLB + USDZ, PBR-материалы и автоматический контроль</small></span></article><article><b>03</b><span><strong>Виджет и аналитика</strong><small>Запуски AR, размещения и путь до корзины</small></span></article></div></section>
     <footer className="shell"><span>MIRRAI © 2026</span><a href="/admin">Кабинет магазина</a><span>Мебель — в вашем пространстве.</span></footer>
   </main>;

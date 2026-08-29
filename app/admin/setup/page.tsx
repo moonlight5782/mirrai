@@ -8,5 +8,8 @@ export const metadata: Metadata = { title: "Подключение магази�
 
 export default async function SetupPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await getChatGPTUser();
-  return user ? <SetupWizard displayName={user.displayName}/> : <AdminAccessGate section="Установка" returnTo={await adminReturnTo("/admin/setup", searchParams)} />;
+  const params = await searchParams;
+  const rawShop = Array.isArray(params.shop) ? params.shop[0] : params.shop;
+  const shopSlug = rawShop?.slice(0, 60) ?? "";
+  return user ? <SetupWizard displayName={user.displayName} shopSlug={shopSlug}/> : <AdminAccessGate section="Установка" returnTo={await adminReturnTo("/admin/setup", Promise.resolve(params))} />;
 }

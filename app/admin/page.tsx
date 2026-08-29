@@ -8,6 +8,6 @@ export const metadata: Metadata = { title: "Кабинет — MIRRAI", robots: 
 
 export default async function AdminPage() {
   const user = await getChatGPTUser();
-  if (user) redirect("/admin/catalog");
+  if (user) redirect("/admin/clients");
   return <AdminAccessGate section="Кабинет" returnTo="/admin" />;
 }

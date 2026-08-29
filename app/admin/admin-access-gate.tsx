@@ -1,21 +1,22 @@
-import Link from "next/link";
+/* eslint-disable @next/next/no-html-link-for-pages -- full document navigation is intentional for the deployed vinext runtime */
 import { chatGPTSignInPath } from "../chatgpt-auth";
 
-type AdminSection = "Клиенты" | "Каталог" | "Аналитика" | "Установка" | "Кабинет";
+type AdminSection = "Клиенты" | "Каталог" | "Аналитика" | "Установка" | "Подписка" | "Кабинет";
 
 const sections = [
   { label: "Клиенты", href: "/admin/clients", text: "Магазины, владельцы и состояние подключения" },
   { label: "Каталог", href: "/admin/catalog", text: "Товары и готовность 3D-моделей" },
   { label: "Аналитика", href: "/admin/analytics", text: "Открытия, запуски AR и размещения" },
   { label: "Установка", href: "/admin/setup", text: "Пошаговое подключение виджета" },
+  { label: "Подписка", href: "/admin/subscription", text: "Тариф, статус и условия пилота" },
 ] as const;
 
 export function AdminAccessGate({ section, returnTo }: { section: AdminSection; returnTo: string }) {
   return (
     <main className="admin-gate">
       <nav className="admin-gate-nav">
-        <Link href="/" className="admin-brand">MIRR<span>AI</span></Link>
-        <Link href="/">Вернуться на сайт</Link>
+        <a href="/" className="admin-brand">MIRR<span>AI</span></a>
+        <a href="/">Вернуться на сайт</a>
       </nav>
       <section className="admin-gate-content">
         <div className="admin-gate-copy">
@@ -27,9 +28,9 @@ export function AdminAccessGate({ section, returnTo }: { section: AdminSection; 
         </div>
         <div className="admin-gate-sections">
           {sections.map((item, index) => (
-            <Link key={item.href} className={item.label === section ? "active" : ""} href={item.href}>
+            <a key={item.href} className={item.label === section ? "active" : ""} href={item.href}>
               <i>0{index + 1}</i><span><b>{item.label}</b><small>{item.text}</small></span><em>↗</em>
-            </Link>
+            </a>
           ))}
         </div>
       </section>

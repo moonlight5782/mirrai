@@ -147,7 +147,7 @@ function hfJob(externalJobId: string): { operation: HfOperation; eventId: string
 function findGlb(value: unknown): { url?: string; path?: string } | null {
   if (typeof value === "string") {
     const trimmed = value.trim();
-    if (/^[\[{]/.test(trimmed)) { try { return findGlb(JSON.parse(trimmed)); } catch { /* inspect it as plain text */ } }
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) { try { return findGlb(JSON.parse(trimmed)); } catch { /* inspect it as plain text */ } }
     const absolute = trimmed.match(/https?:\/\/[^"'\\\s]+\.glb(?:\?[^"'\\\s]*)?/i)?.[0];
     if (absolute) return { url: absolute };
     const path = trimmed.match(/\/tmp\/[^"'\\\s]+\.glb/i)?.[0];

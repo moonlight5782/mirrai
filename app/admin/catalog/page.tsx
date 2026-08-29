@@ -8,5 +8,8 @@ export const metadata: Metadata = { title: "Каталог моделей — MI
 
 export default async function CatalogAdminPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await getChatGPTUser();
-  return user ? <CatalogAdmin displayName={user.displayName}/> : <AdminAccessGate section="Каталог" returnTo={await adminReturnTo("/admin/catalog", searchParams)} />;
+  const params = await searchParams;
+  const rawShop = Array.isArray(params.shop) ? params.shop[0] : params.shop;
+  const shopSlug = rawShop?.slice(0, 60) ?? "";
+  return user ? <CatalogAdmin displayName={user.displayName} shopSlug={shopSlug}/> : <AdminAccessGate section="Каталог" returnTo={await adminReturnTo("/admin/catalog", Promise.resolve(params))} />;
 }
