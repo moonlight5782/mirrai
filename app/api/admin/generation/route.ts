@@ -91,6 +91,13 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
         else if (state.status === "failed") throw new Error(state.error || "textured_generation_failed");
         continue;
       }
+      const [currentModel] = await db.select().from(productModels).where(eq(productModels.productId, product.id)).limit(1);
+      if (config.kind === "huggingface" && config.url.includes("stable-fast-3d") && currentModel?.glbUrl) {
+        const message = "Геометрия сохранена; для этого товара требуется texture-only обработка без изменения формы";
+        await db.update(generationJobs).set({ status: "review", resultGlbUrl: currentModel.glbUrl, errorCode: null, errorMessage: message, updatedAt: new Date().toISOString(), completedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
+        await db.update(productModels).set({ status: "review", validationMessage: message, updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id));
+        continue;
+      }
       await db.update(generationJobs).set({ status: "submitting", attempt: job.attempt + 1, startedAt: job.startedAt ?? new Date().toISOString(), updatedAt: new Date().toISOString(), errorCode: null, errorMessage: null }).where(eq(generationJobs.id, job.id));
       const operation = hfOperation(config);
       const externalJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin, operation);

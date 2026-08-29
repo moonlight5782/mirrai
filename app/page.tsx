@@ -6,14 +6,14 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 type View = "landing" | "viewer";
 type UploadState = "idle" | "uploading" | "generating" | "ready" | "error";
 type Dimensions = { width: number; height: number; depth: number };
-type Product = { id: string; name: string; category: string; material: string; price: string; color: string; model: string; iosModel?: string; dimensions: Dimensions };
+type Product = { id: string; name: string; category: string; material: string; price: string; color: string; model: string; iosModel?: string; textured: boolean; dimensions: Dimensions };
 type ModelViewerElement = HTMLElement & { activateAR?: () => Promise<void>; getDimensions?: () => { x: number; y: number; z: number } };
 
 const products: Product[] = [
-  { id: "cloud", name: "Кресло Cloud", category: "Кресла", material: "Букле, светлый беж", price: "67 000 ₽", color: "#d2bda8", model: "/chair.glb", dimensions: { width: 84, height: 76, depth: 82 } },
-  { id: "arc", name: "Стул Arc", category: "Стулья", material: "Дуб и ткань", price: "29 000 ₽", color: "#92765c", model: "/catalog/arc-chair.glb", dimensions: { width: 52, height: 81, depth: 55 } },
-  { id: "halo", name: "Торшер Halo", category: "Освещение", material: "Латунь, матовый металл", price: "18 400 ₽", color: "#d0be85", model: "/catalog/halo-lamp.glb", dimensions: { width: 48, height: 158, depth: 48 } },
-  { id: "plane", name: "Стол Plane", category: "Столы", material: "Натуральный дуб", price: "74 000 ₽", color: "#aa8763", model: "/catalog/plane-table.glb", dimensions: { width: 160, height: 75, depth: 86 } },
+  { id: "cloud", name: "Кресло Cloud", category: "Кресла", material: "Букле, светлый беж", price: "67 000 ₽", color: "#d2bda8", model: "/chair.glb", textured: true, dimensions: { width: 84, height: 76, depth: 82 } },
+  { id: "arc", name: "Стул Arc", category: "Стулья", material: "Дуб и ткань", price: "29 000 ₽", color: "#92765c", model: "/catalog/arc-chair.glb", textured: true, dimensions: { width: 52, height: 81, depth: 55 } },
+  { id: "halo", name: "Торшер Halo", category: "Освещение", material: "Латунь, матовый металл", price: "18 400 ₽", color: "#d0be85", model: "/catalog/halo-lamp.glb", textured: true, dimensions: { width: 48, height: 158, depth: 48 } },
+  { id: "plane", name: "Стол Plane", category: "Столы", material: "Натуральный дуб", price: "74 000 ₽", color: "#aa8763", model: "/catalog/plane-table.glb", textured: true, dimensions: { width: 160, height: 75, depth: 86 } },
 ];
 
 const reconstructionApi = process.env.NEXT_PUBLIC_RECONSTRUCTION_API_URL ?? "";
@@ -73,6 +73,7 @@ export default function Home() {
       color: /^#[0-9a-f]{6}$/i.test(params.get("color") ?? "") ? params.get("color")! : base.color,
       model: safeAssetUrl(params.get("model"), base.model),
       iosModel: safeAssetUrl(params.get("iosModel"), "") || undefined,
+      textured: params.get("textured") === "1",
       dimensions: { width: positiveNumber(params.get("width"), base.dimensions.width), height: positiveNumber(params.get("height"), base.dimensions.height), depth: positiveNumber(params.get("depth"), base.dimensions.depth) },
     };
     const requestedOrigin = params.get("parentOrigin");
@@ -181,7 +182,7 @@ export default function Home() {
           {React.createElement("model-viewer", { ref: arRef, src: modelSource, "ios-src": customModel ? undefined : selected.iosModel, alt: `3D-модель ${customName || selected.name}`, ar: true, "ar-modes": "webxr scene-viewer quick-look", "ar-placement": "floor", "ar-scale": "fixed", "camera-controls": true, "touch-action": "pan-y", "shadow-intensity": "1.45", "shadow-softness": ".75", exposure, "environment-image": "neutral", "camera-orbit": "35deg 68deg auto", "field-of-view": "30deg" }, React.createElement("button", { slot: "ar-button", className: "native-ar-button" }, "Посмотреть у себя", React.createElement("span", null, "↗")))}
           <div className="room-preview"><i className="preview-window"/><i className="preview-floor"/><span>Вращайте модель пальцем</span></div>
           {photoPending && <div className="reconstruction-screen">{customPreview && <img src={customPreview} alt="Исходная фотография предмета"/>}<p>Создаём AR-модель</p><div className="generation-steps"><span className="done">Фото</span><span className={uploadState === "generating" ? "active" : ""}>Геометрия</span><span>PBR</span><span>GLB</span></div><small>{uploadMessage}</small></div>}
-          <div className="viewer-badges"><span>PBR MATERIALS</span><span>AR SCALE 1:1</span><span>ADAPTIVE LIGHT</span></div>
+          <div className="viewer-badges"><span>{customModel ? "MODEL MATERIALS" : selected.textured ? "PBR MATERIALS" : "GEOMETRY PREVIEW"}</span><span>AR SCALE 1:1</span><span>ADAPTIVE LIGHT</span></div>
         </div>
         <aside className="details-panel">
           <div><p className="control-label">Товар</p><h2>{customName || selected.name}</h2><p className="price">{customName ? "Пользовательская модель" : selected.price}</p><div className="material-row"><i style={{ background: selected.color }}/><span>{selected.material}</span></div></div>

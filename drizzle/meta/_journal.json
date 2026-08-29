@@ -78,6 +78,13 @@
       "when": 1788004200000,
       "tag": "0010_retry_alba_sf3d_session",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788006000000,
+      "tag": "0011_restore_alba_geometry",
+      "breakpoints": true
     }
   ]
 }
