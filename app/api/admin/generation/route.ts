@@ -10,6 +10,8 @@ type Runtime = { RECONSTRUCTION_API_URL?: string; RECONSTRUCTION_API_TOKEN?: str
 type ServiceConfig = { kind: "gateway" | "huggingface"; url: string; token?: string };
 type HfOperation = "generation_all" | "shape_generation" | "run_button";
 type GenerationState = { status?: string; model_url?: string; error?: string; textured?: boolean };
+type HfJob = { operation: HfOperation; eventId: string; sessionHash?: string };
+type HfQueueMessage = { msg?: string; event_id?: string | null; success?: boolean; output?: { data?: unknown[]; error?: string } };
 const activeStatuses = ["queued", "submitting", "processing", "blocked"];
 
 function serviceConfig(): ServiceConfig | null {
@@ -128,20 +130,56 @@ async function submitGeneration(config: ServiceConfig, file: File, operation: Hf
   if (!uploaded.ok) throw new Error(`hf_upload_${uploaded.status}`);
   const paths = await uploaded.json() as string[]; if (!paths[0]) throw new Error("hf_upload_invalid");
   const image = { path: paths[0], orig_name: file.name, mime_type: file.type, meta: { _type: "gradio.FileData" } };
+  if (operation === "run_button") {
+    const sessionHash = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+    const backgroundEvent = await submitHfQueue(config, sessionHash, ["Remove Background", image, null, 0.85, "None", -1, 1024]);
+    const background = await pollHfQueue(config, sessionHash, backgroundEvent, 30_000);
+    if (background.status !== "complete") throw new Error(background.error || "sf3d_background_timeout");
+    const eventId = await submitHfQueue(config, sessionHash, ["Run", image, null, 0.85, "None", -1, 1024]);
+    return `${operation}:${sessionHash}:${eventId}`;
+  }
   const auth = headers(config.token) ?? {};
-  const data = operation === "run_button"
-    ? [null, image, null, 0.85, "None", -1, 1024]
-    : ["", image, null, null, null, null, 30, 5, 1234, 256, true, 8000, true];
+  const data = ["", image, null, null, null, null, 30, 5, 1234, 256, true, 8000, true];
   const response = await fetch(`${config.url}/call/${operation}`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ data }) });
   if (!response.ok) throw new Error(`hf_submit_${response.status}`);
   const result = await response.json() as { event_id?: string }; if (!result.event_id) throw new Error("hf_submit_invalid"); return `${operation}:${result.event_id}`;
 }
 
-function hfJob(externalJobId: string): { operation: HfOperation; eventId: string } {
+function hfJob(externalJobId: string): HfJob {
   const separator = externalJobId.indexOf(":");
   if (separator < 0) return { operation: "generation_all", eventId: externalJobId };
   const candidate = externalJobId.slice(0, separator);
-  return { operation: candidate === "shape_generation" || candidate === "run_button" ? candidate : "generation_all", eventId: externalJobId.slice(separator + 1) };
+  const operation = candidate === "shape_generation" || candidate === "run_button" ? candidate : "generation_all";
+  const remainder = externalJobId.slice(separator + 1);
+  if (operation === "run_button") {
+    const next = remainder.indexOf(":");
+    if (next > 0) return { operation, sessionHash: remainder.slice(0, next), eventId: remainder.slice(next + 1) };
+  }
+  return { operation, eventId: remainder };
+}
+
+async function submitHfQueue(config: ServiceConfig, sessionHash: string, data: unknown[]) {
+  const response = await fetch(`${config.url}/queue/join`, { method: "POST", headers: { ...(headers(config.token) ?? {}), "content-type": "application/json" }, body: JSON.stringify({ data, event_data: null, fn_index: 5, trigger_id: 13, session_hash: sessionHash }) });
+  if (!response.ok) throw new Error(`hf_queue_submit_${response.status}`);
+  const result = await response.json() as { event_id?: string };
+  if (!result.event_id) throw new Error("hf_queue_submit_invalid");
+  return result.event_id;
+}
+
+async function pollHfQueue(config: ServiceConfig, sessionHash: string, eventId: string, timeoutMs: number) {
+  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), timeoutMs); let payload = "";
+  try {
+    const response = await fetch(`${config.url}/queue/data?session_hash=${encodeURIComponent(sessionHash)}`, { headers: { ...(headers(config.token) ?? {}), accept: "text/event-stream" }, signal: controller.signal });
+    if (!response.ok) throw new Error(`hf_queue_status_${response.status}`);
+    const reader = response.body?.getReader(); const decoder = new TextDecoder();
+    while (reader) { const next = await reader.read(); if (next.done) break; payload += decoder.decode(next.value, { stream: true }); if (payload.includes(`\"event_id\":\"${eventId}\"`) && payload.includes('"msg":"process_completed"')) break; }
+  } catch (cause) { if (!(cause instanceof DOMException && cause.name === "AbortError")) throw cause; }
+  finally { clearTimeout(timeout); }
+  const messages = payload.split(/\r?\n/).filter(line => line.startsWith("data: ")).flatMap(line => { try { return [JSON.parse(line.slice(6)) as HfQueueMessage]; } catch { return []; } });
+  const complete = messages.findLast(message => message.msg === "process_completed" && message.event_id === eventId);
+  if (!complete) return { status: "processing" as const };
+  if (complete.success === false || complete.output?.error) return { status: "failed" as const, error: complete.output?.error || "Hugging Face queue failed" };
+  return { status: "complete" as const, data: complete.output?.data ?? [] };
 }
 
 function findGlb(value: unknown): { url?: string; path?: string } | null {
@@ -168,6 +206,14 @@ async function pollGeneration(config: ServiceConfig, externalJobId: string): Pro
     return result.json();
   }
   const job = hfJob(externalJobId);
+  if (job.operation === "run_button") {
+    if (!job.sessionHash) return { status: "failed", error: "Stable Fast 3D session is missing" };
+    const queued = await pollHfQueue(config, job.sessionHash, job.eventId, 20_000);
+    if (queued.status === "processing") return { status: "processing" };
+    if (queued.status === "failed") return { status: "failed", error: queued.error };
+    const model = findGlb(queued.data);
+    return model?.url || model?.path ? { status: "ready", model_url: model.url ?? model.path, textured: true } : { status: "failed", error: "Space did not return a GLB file" };
+  }
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12_000); let payload = "";
   try {
     const response = await fetch(`${config.url}/call/${job.operation}/${encodeURIComponent(job.eventId)}`, { headers: { ...(headers(config.token) ?? {}), accept: "text/event-stream" }, signal: controller.signal });

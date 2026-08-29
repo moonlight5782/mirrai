@@ -174,7 +174,7 @@ test("HUGGE pilot imports website photos and installs automatically on OpenCart"
 });
 
 test("batch 3D generation requires texture and never publishes unreviewed models", async () => {
-  const [schema, migration, cachedSource, restoredJob, shapeRetry, downloadRetry, retexture, route, catalog] = await Promise.all([
+  const [schema, migration, cachedSource, restoredJob, shapeRetry, downloadRetry, retexture, sf3dRetry, route, catalog] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0004_early_legion.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0005_cached_hugge_alba.sql", import.meta.url), "utf8"),
@@ -182,14 +182,16 @@ test("batch 3D generation requires texture and never publishes unreviewed models
     readFile(new URL("../drizzle/0007_retry_hugge_alba_shape.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0008_retry_hugge_alba_download.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0009_retexture_hugge_alba.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0010_retry_alba_sf3d_session.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/generation/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/catalog/catalog-admin.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(schema, /generationJobs/); assert.match(migration, /hugge-alba-89990/); assert.match(route, /RECONSTRUCTION_API_URL/); assert.match(route, /HUGGINGFACE_SPACE_URL/); assert.match(route, /generation_all/); assert.match(route, /shape_generation/); assert.match(route, /run_button/); assert.match(route, /stable-fast-3d/); assert.match(route, /untextured_model_rejected/);
+  assert.match(schema, /generationJobs/); assert.match(migration, /hugge-alba-89990/); assert.match(route, /RECONSTRUCTION_API_URL/); assert.match(route, /HUGGINGFACE_SPACE_URL/); assert.match(route, /generation_all/); assert.match(route, /shape_generation/); assert.match(route, /run_button/); assert.match(route, /stable-fast-3d/); assert.match(route, /Remove Background/); assert.match(route, /queue\/join/); assert.match(route, /queue\/data/); assert.match(route, /untextured_model_rejected/);
   assert.match(cachedSource, /catalog-sources\/hugge-md\/alba-89990-1\.jpg/); assert.match(cachedSource, /`status`='queued'/); assert.match(route, /config\.kind === "huggingface" \? 1 : 3/); assert.match(route, /sameHost\(imageUrl, appOrigin\)/);
   assert.match(restoredJob, /INSERT OR IGNORE INTO `generation_jobs`/); assert.match(restoredJob, /hugge-alba-89990/);
   assert.match(shapeRetry, /`error_code`='texture_fallback'/); assert.match(route, /function findGlb/); assert.match(route, /findGlb\(data\[1\]\)/);
   assert.match(downloadRetry, /Gradio file proxy/); assert.match(route, /gradio_api\/file=/); assert.match(route, /call\/\$\{textured \? "all" : "shape"\}\/file=/);
   assert.match(retexture, /hugge-alba-89990-textured/); assert.match(retexture, /обязательны геометрия и текстура/); assert.match(route, /Текстурированная модель создана/);
+  assert.match(sf3dRetry, /сессионную очередь Stable Fast 3D/); assert.match(sf3dRetry, /`attempt`=0/);
   assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
 });
