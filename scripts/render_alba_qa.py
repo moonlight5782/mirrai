@@ -28,7 +28,7 @@ def render_view(scene: trimesh.Scene, angle: float) -> Image.Image:
         tri = verts[faces]
         centers = tri.mean(axis=1)
         normals = geom.face_normals
-        base = np.array([82, 84, 88] if "Upholstery" in name else [31, 33, 37], dtype=float)
+        base = np.array([65, 68, 73] if "Upholstery" in name else [16, 18, 22], dtype=float)
         diffuse = 0.55 + 0.45 * np.abs(normals @ light)
         colors = np.clip(base[None, :] * diffuse[:, None], 0, 255).astype(np.uint8)
         triangles.append((tri, centers @ camera, colors))
@@ -59,7 +59,7 @@ def render_view(scene: trimesh.Scene, angle: float) -> Image.Image:
 def main() -> None:
     scene = trimesh.load(MODEL, force="scene", process=False)
     canvas = Image.new("RGB", (VIEW_SIZE[0] * 2, VIEW_SIZE[1] * 2), (220, 216, 208))
-    for index, angle in enumerate((0, 90, 180, 270)):
+    for index, angle in enumerate((25, 115, 205, 295)):
         canvas.paste(render_view(scene, angle), ((index % 2) * VIEW_SIZE[0], (index // 2) * VIEW_SIZE[1]))
     canvas.save(OUTPUT, quality=95)
     print(OUTPUT)

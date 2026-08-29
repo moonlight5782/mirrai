@@ -19,6 +19,23 @@ def rgba(rgb: np.ndarray) -> np.ndarray:
     return np.concatenate((np.clip(rgb, 0, 255).astype(np.uint8), alpha), axis=1)
 
 
+def close_face_mask(mask: np.ndarray, adjacency: np.ndarray, iterations: int = 2) -> np.ndarray:
+    """Fill narrow classification gaps without changing the source geometry."""
+    closed = mask.copy()
+    for _ in range(iterations):
+        expanded = closed.copy()
+        expanded[adjacency[:, 0]] |= closed[adjacency[:, 1]]
+        expanded[adjacency[:, 1]] |= closed[adjacency[:, 0]]
+        closed = expanded
+    for _ in range(iterations):
+        outside = ~closed
+        expanded_outside = outside.copy()
+        expanded_outside[adjacency[:, 0]] |= outside[adjacency[:, 1]]
+        expanded_outside[adjacency[:, 1]] |= outside[adjacency[:, 0]]
+        closed = ~expanded_outside
+    return closed
+
+
 def main() -> None:
     mesh = trimesh.load(SOURCE, force="mesh", process=False)
     source_min, source_max = mesh.bounds
@@ -51,18 +68,30 @@ def main() -> None:
     # The tubular base occupies the lower third of the model and reaches the
     # underside of the seat only near the outer mounting points. Keeping this
     # selection spatial avoids remeshing or damaging the verified thin rods.
-    metal_faces = (
+    metal_seed = (
         ((height < 0.50) & (luminance < 54.0))
         | (height < 0.11)
-        | ((height < 0.42) & (outer > 0.90))
+        | ((height < 0.47) & (outer > 0.68))
     )
+    metal_faces = close_face_mask(metal_seed, mesh.face_adjacency, iterations=2)
+
+    # The dark reference-photo shadow below the cushion is not a metal part.
+    # Keep the central upholstered seat edge fabric-coloured while retaining
+    # the true outer mounting tubes and the frame below it.
+    cushion_edge = (
+        (height > 0.235) & (height < 0.405) & (outer < 0.68)
+    ) | (
+        (height > 0.145) & (height < 0.43) & (centers[:, 2] > -0.25)
+    )
+    metal_faces[cushion_edge] = False
     fabric_faces = ~metal_faces
 
     fabric = mesh.submesh([fabric_faces], append=True, repair=False)
     metal = mesh.submesh([metal_faces], append=True, repair=False)
 
-    # Fine deterministic variation gives the upholstery a velvet-like response
-    # without a heavy bitmap texture. Vertex colors are multiplied by PBR base.
+    # Keep vertex colors close to white and put the actual colour in the PBR
+    # material. This avoids Safari/model-viewer differences when multiplying
+    # dark vertex colours by a second, much lighter baseColorFactor.
     v = fabric.vertices
     n = fabric.vertex_normals
     weave = (
@@ -70,24 +99,24 @@ def main() -> None:
         + np.sin(v[:, 1] * 420.0 + 0.7)
         + np.sin(v[:, 2] * 380.0 + 1.4)
     ) / 3.0
-    velvet = 0.92 + 0.07 * weave + 0.05 * np.clip(np.abs(n[:, 2]), 0.0, 1.0)
-    fabric_rgb = np.array([92.0, 94.0, 97.0])[None, :] * velvet[:, None]
+    velvet = 0.91 + 0.05 * weave + 0.035 * np.clip(np.abs(n[:, 2]), 0.0, 1.0)
+    fabric_rgb = np.full((len(v), 3), 255.0) * velvet[:, None]
     fabric.visual = trimesh.visual.ColorVisuals(mesh=fabric, vertex_colors=rgba(fabric_rgb))
     fabric.visual.material = trimesh.visual.material.PBRMaterial(
         name="Alba grey velvet",
-        baseColorFactor=[0.72, 0.73, 0.75, 1.0],
+        baseColorFactor=[0.255, 0.265, 0.285, 1.0],
         metallicFactor=0.0,
-        roughnessFactor=0.88,
+        roughnessFactor=0.93,
     )
 
-    metal_rgb = np.tile(np.array([[43, 45, 49]], dtype=np.uint8), (len(metal.vertices), 1))
+    metal_rgb = np.tile(np.array([[255, 255, 255]], dtype=np.uint8), (len(metal.vertices), 1))
     _ = metal.vertex_normals
     metal.visual = trimesh.visual.ColorVisuals(mesh=metal, vertex_colors=rgba(metal_rgb))
     metal.visual.material = trimesh.visual.material.PBRMaterial(
         name="Alba matte black metal",
-        baseColorFactor=[0.24, 0.25, 0.27, 1.0],
-        metallicFactor=0.78,
-        roughnessFactor=0.34,
+        baseColorFactor=[0.025, 0.029, 0.036, 1.0],
+        metallicFactor=0.72,
+        roughnessFactor=0.42,
     )
 
     scene = trimesh.Scene()
