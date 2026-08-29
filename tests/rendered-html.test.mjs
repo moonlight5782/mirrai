@@ -36,9 +36,22 @@ test("renders a real store-card integration demo", async () => {
   const response = await render("/demo-store");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Демонстрация виджета MIRRAI/i);
-  assert.match(html, /Кресло Cloud/i);
-  assert.match(html, /mirrai-demo-slot/i);
+  assert.match(html, /HUGGE × MIRRAI/i);
+  assert.match(html, /рабочая AR-витрина/i);
+});
+
+test("HUGGE demo reads real products and model states from the shared catalogue", async () => {
+  const [store, route] = await Promise.all([
+    readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/storefront/catalog/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(store, /api\/storefront\/catalog\?shop=hugge-md/);
+  assert.match(store, /catalog\.items\.find\(item => item\.demoAvailable\)/);
+  assert.match(store, /AR появится после создания 3D-модели/);
+  assert.match(store, /selected\.model/);
+  assert.match(route, /leftJoin\(productModels/);
+  assert.match(route, /demoAvailable/);
+  assert.match(route, /published/);
 });
 
 test("embeddable SDK creates a product-aware accessible AR launcher", async () => {
