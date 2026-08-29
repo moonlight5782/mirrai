@@ -176,7 +176,7 @@ test("HUGGE pilot imports website photos and installs automatically on OpenCart"
 });
 
 test("batch 3D generation requires texture and never publishes unreviewed models", async () => {
-  const [schema, migration, cachedSource, restoredJob, shapeRetry, downloadRetry, retexture, sf3dRetry, geometryRestore, repairedAlba, albaCacheBust, originalTexturedAlba, crossedBaseAlba, attachedBaseAlba, route, catalog, home] = await Promise.all([
+  const [schema, migration, cachedSource, restoredJob, shapeRetry, downloadRetry, retexture, sf3dRetry, geometryRestore, repairedAlba, albaCacheBust, originalTexturedAlba, crossedBaseAlba, attachedBaseAlba, hunyuanAlba, route, catalog, home] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0004_early_legion.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0005_cached_hugge_alba.sql", import.meta.url), "utf8"),
@@ -191,6 +191,7 @@ test("batch 3D generation requires texture and never publishes unreviewed models
     readFile(new URL("../drizzle/0014_alba_original_geometry_textures.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0015_alba_crossed_sled_base.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0016_alba_attached_cross_base.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0017_publish_alba_hunyuan2mv_pbr.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/generation/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/catalog/catalog-admin.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
@@ -208,7 +209,10 @@ test("batch 3D generation requires texture and never publishes unreviewed models
   assert.match(originalTexturedAlba, /alba-chair-original-textured-v3\.glb/); assert.match(originalTexturedAlba, /402264 грани/);
   assert.match(crossedBaseAlba, /alba-chair-cross-base-v4\.glb/); assert.match(crossedBaseAlba, /двух непрерывных стальных полозьев/);
   assert.match(attachedBaseAlba, /alba-chair-cross-base-v5\.glb/); assert.match(attachedBaseAlba, /свисающих и отсоединенных труб нет/);
+  assert.match(hunyuanAlba, /alba-chair-hunyuan2mv-pbr\.glb/); assert.match(hunyuanAlba, /62 × 86 × 90 см/); assert.match(hunyuanAlba, /generated_multiview/);
   const albaTextureOnly = await readFile(new URL("../scripts/texture_only_alba.py", import.meta.url), "utf8");
   assert.match(albaTextureOnly, /crossed_sled_base/); assert.match(albaTextureOnly, /damaged_frame_mask/); assert.doesNotMatch(albaTextureOnly, /clean_steel_frame/);
+  const albaMultiview = await readFile(new URL("../scripts/materialize_alba.py", import.meta.url), "utf8");
+  assert.match(albaMultiview, /TARGET_EXTENTS/); assert.match(albaMultiview, /Alba grey velvet/); assert.match(albaMultiview, /Alba matte black metal/);
   assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
 });
