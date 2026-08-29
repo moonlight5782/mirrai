@@ -108,9 +108,15 @@ def main() -> None:
     face_centres = mesh.triangles_center
     # In the reconstruction Y is vertical. Everything clearly below the soft
     # seat shell is the welded black steel frame.
-    metal_mask = face_centres[:, 1] < -0.285
+    # Never cut into the soft shell: mobile side/underside views expose even a
+    # small missing band. Only discard geometry clearly below the upholstered
+    # seat, where the damaged reconstructed legs live. The replacement tubes
+    # overlap this cut at their mounting points.
+    metal_mask = face_centres[:, 1] < -0.44
     upholstery = mesh.submesh([np.flatnonzero(~metal_mask)], append=True, repair=False)
     reconstructed_metal = mesh.submesh([np.flatnonzero(metal_mask)], append=True, repair=False)
+    if len(reconstructed_metal.faces) > 25_000:
+        raise RuntimeError("Frame cut reached the upholstered shell; refusing an output with side holes")
 
     base, normal, metallic_roughness = fabric_maps()
     fabric_material = trimesh.visual.material.PBRMaterial(
@@ -144,6 +150,7 @@ def main() -> None:
         "upholstery_faces": len(upholstery.faces),
         "metal_faces": len(metal.faces),
         "replaced_reconstruction_frame_faces": len(reconstructed_metal.faces),
+        "shell_cut_guard": "passed",
         "watertight": mesh.is_watertight,
         "bounds_preserved": bool(np.allclose(source_bounds, mesh.bounds, atol=2e-4)),
     })

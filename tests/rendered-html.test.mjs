@@ -200,5 +200,7 @@ test("batch 3D generation requires texture and never publishes unreviewed models
   assert.match(sf3dRetry, /сессионную очередь Stable Fast 3D/); assert.match(sf3dRetry, /`attempt`=0/);
   assert.match(geometryRestore, /fbb61c25-5942-4deb-a892-9e241f436279/); assert.match(geometryRestore, /texture-only/); assert.match(route, /currentModel\?\.glbUrl/); assert.match(route, /texture-only обработка/); assert.match(home, /GEOMETRY PREVIEW/);
   assert.match(repairedAlba, /alba-chair-repaired-pbr\.glb/); assert.match(repairedAlba, /`status`='published'/); assert.match(repairedAlba, /PBR-велюр/);
+  const albaRepair = await readFile(new URL("../scripts/repair_and_texture_alba.py", import.meta.url), "utf8");
+  assert.match(albaRepair, /25_000/); assert.match(albaRepair, /side holes/); assert.match(albaRepair, /-0\.44/);
   assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
 });
