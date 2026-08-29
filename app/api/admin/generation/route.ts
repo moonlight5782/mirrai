@@ -8,7 +8,7 @@ import { assets, generationJobs, productModels, products } from "../../../../db/
 
 type Runtime = { RECONSTRUCTION_API_URL?: string; RECONSTRUCTION_API_TOKEN?: string; HUGGINGFACE_SPACE_URL?: string; HUGGINGFACE_TOKEN?: string };
 type ServiceConfig = { kind: "gateway" | "huggingface"; url: string; token?: string };
-type HfOperation = "generation_all" | "shape_generation";
+type HfOperation = "generation_all" | "shape_generation" | "run_button";
 type GenerationState = { status?: string; model_url?: string; error?: string; textured?: boolean };
 const activeStatuses = ["queued", "submitting", "processing", "blocked"];
 
@@ -32,6 +32,7 @@ function serviceConfig(): ServiceConfig | null {
 
 function headers(token?: string) { return token ? { authorization: `Bearer ${token}` } : undefined; }
 function imageList(value: string) { try { return (JSON.parse(value) as unknown[]).filter((url): url is string => typeof url === "string" && url.startsWith("https://")).slice(0, 8); } catch { return []; } }
+function hfOperation(config: ServiceConfig): HfOperation { return config.kind === "huggingface" && config.url.includes("stable-fast-3d") ? "run_button" : "generation_all"; }
 
 export async function GET(request: Request) {
   const user = await getChatGPTUser();
@@ -89,7 +90,7 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
         continue;
       }
       await db.update(generationJobs).set({ status: "submitting", attempt: job.attempt + 1, startedAt: job.startedAt ?? new Date().toISOString(), updatedAt: new Date().toISOString(), errorCode: null, errorMessage: null }).where(eq(generationJobs.id, job.id));
-      const operation: HfOperation = "generation_all";
+      const operation = hfOperation(config);
       const externalJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin, operation);
       await db.update(generationJobs).set({ status: "processing", externalJobId, updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
       await db.update(productModels).set({ status: "processing", validationMessage: "3D-модель создаётся", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); submitted += 1;
@@ -128,7 +129,10 @@ async function submitGeneration(config: ServiceConfig, file: File, operation: Hf
   const paths = await uploaded.json() as string[]; if (!paths[0]) throw new Error("hf_upload_invalid");
   const image = { path: paths[0], orig_name: file.name, mime_type: file.type, meta: { _type: "gradio.FileData" } };
   const auth = headers(config.token) ?? {};
-  const response = await fetch(`${config.url}/call/${operation}`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ data: ["", image, null, null, null, null, 30, 5, 1234, 256, true, 8000, true] }) });
+  const data = operation === "run_button"
+    ? [null, image, null, 0.85, "None", -1, 1024]
+    : ["", image, null, null, null, null, 30, 5, 1234, 256, true, 8000, true];
+  const response = await fetch(`${config.url}/call/${operation}`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ data }) });
   if (!response.ok) throw new Error(`hf_submit_${response.status}`);
   const result = await response.json() as { event_id?: string }; if (!result.event_id) throw new Error("hf_submit_invalid"); return `${operation}:${result.event_id}`;
 }
@@ -137,7 +141,7 @@ function hfJob(externalJobId: string): { operation: HfOperation; eventId: string
   const separator = externalJobId.indexOf(":");
   if (separator < 0) return { operation: "generation_all", eventId: externalJobId };
   const candidate = externalJobId.slice(0, separator);
-  return { operation: candidate === "shape_generation" ? "shape_generation" : "generation_all", eventId: externalJobId.slice(separator + 1) };
+  return { operation: candidate === "shape_generation" || candidate === "run_button" ? candidate : "generation_all", eventId: externalJobId.slice(separator + 1) };
 }
 
 function findGlb(value: unknown): { url?: string; path?: string } | null {
@@ -177,7 +181,7 @@ async function pollGeneration(config: ServiceConfig, externalJobId: string): Pro
   if (!complete) return { status: "processing" };
   const data = JSON.parse(complete) as unknown[];
   const model = job.operation === "generation_all" ? (findGlb(data[1]) ?? findGlb(data)) : (findGlb(data[0]) ?? findGlb(data));
-  return model?.url || model?.path ? { status: "ready", model_url: model.url ?? model.path, textured: job.operation === "generation_all" } : { status: "failed", error: "Space did not return a GLB file" };
+  return model?.url || model?.path ? { status: "ready", model_url: model.url ?? model.path, textured: job.operation !== "shape_generation" } : { status: "failed", error: "Space did not return a GLB file" };
 }
 
 async function storeGeneratedModel(shopId: number, productId: number, jobId: string, config: ServiceConfig, modelUrl: string, textured: boolean) {
