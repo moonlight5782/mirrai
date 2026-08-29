@@ -125,7 +125,9 @@ Deployment files and GPU requirements are in [`services/reconstruction`](service
 
 The admin catalog now has a durable batch queue. An operator selects products with source photos, queues them by priority and starts or polls processing. The Hugging Face adapter supports both Hunyuan3D's `generation_all` endpoint and Stable Fast 3D's lighter `run_button` endpoint. Generated GLB files are copied into the merchant's R2 storage and always enter `review`; they never become available in the widget until an operator checks scale and materials and explicitly publishes them. Failed jobs retry up to three times. Geometry-only output is rejected: a model can enter review only when the service returns a textured GLB.
 
-Four HUGGE products are preloaded as the first batch: Alba HUGGE-89990, Ria HUGGE-109553, Ria HUGGE-107376 and Blackburn HUGGE-100326. They remain visibly blocked—not falsely complete—until both the HUGGE HTTPS source and the reconstruction service are available.
+Four HUGGE products are preloaded as the first batch: Alba HUGGE-89990, Ria HUGGE-109553, Ria HUGGE-107376 and Blackburn HUGGE-100326. Alba is the first published pilot model: the detailed reconstruction was retained, its non-manifold parasite was removed, normals were rebuilt, the broken generated frame was replaced with clean tube geometry, and separate velvet/metal PBR materials were applied. The other products remain visibly blocked—not falsely complete—until verified models are available.
+
+The reproducible Alba repair is in `scripts/repair_and_texture_alba.py`. Create a Python 3.12 environment, install `scripts/requirements-mesh.txt`, then pass the original GLB and an output path. The script rejects a changed silhouette or an unclosed repaired source mesh before it exports the catalog asset.
 
 For a no-cost pilot, MIRRAI can also submit jobs to a duplicated Hugging Face ZeroGPU Gradio Space through `HUGGINGFACE_SPACE_URL`. The exact nontechnical setup is documented in [`integrations/huggingface-space`](integrations/huggingface-space/README.md).
 

@@ -85,6 +85,13 @@
       "when": 1788006000000,
       "tag": "0011_restore_alba_geometry",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788007800000,
+      "tag": "0012_publish_alba_repaired_pbr",
+      "breakpoints": true
     }
   ]
 }

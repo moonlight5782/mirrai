@@ -40,3 +40,10 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+
+# local 3D and deployment workspaces
+/.mesh-tools/
+/.tmp-*
+/.hf-space-*/
+/.site-package-stage-*/
+/.openai/*.tar.gz

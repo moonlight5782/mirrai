@@ -2,12 +2,12 @@
   "use strict";
   var script = document.currentScript;
   var scriptOrigin = script && script.src ? new URL(script.src).origin : window.location.origin;
-  var defaults = { productId: "product", name: "Посмотреть товар у себя", price: "", category: "Мебель", material: "", model: "", iosModel: "", width: "80", height: "80", depth: "80", color: "#d2bda8", subscription: "active", label: "Посмотреть у себя", mode: "auto" };
+  var defaults = { productId: "product", name: "Посмотреть товар у себя", price: "", category: "Мебель", material: "", model: "", iosModel: "", textured: "1", width: "80", height: "80", depth: "80", color: "#d2bda8", subscription: "active", label: "Посмотреть у себя", mode: "auto" };
   var allowedEvents = ["model_ready", "ar_open", "object_placed"];
   var instances = [], activeInstance = null, overlay = null, iframe = null, closeButton = null, observer = null, scanTimer = null, installationReported = {};
   function dataConfig(node) { var result = {}; if (!node || !node.dataset) return result; Object.keys(node.dataset).forEach(function (key) { result[key] = node.dataset[key]; }); return result; }
   function style(element, values) { Object.keys(values).forEach(function (key) { element.style[key] = values[key]; }); }
-  function viewerUrl(config) { var url = new URL("/", scriptOrigin); var params = { widget: "1", productId: config.productId, name: config.name, price: config.price, category: config.category, material: config.material, model: config.model, iosModel: config.iosModel, width: config.width, height: config.height, depth: config.depth, color: config.color, subscription: config.subscription, parentOrigin: window.location.origin }; Object.keys(params).forEach(function (key) { if (params[key]) url.searchParams.set(key, params[key]); }); return url.toString(); }
+  function viewerUrl(config) { var url = new URL("/", scriptOrigin); var params = { widget: "1", productId: config.productId, name: config.name, price: config.price, category: config.category, material: config.material, model: config.model, iosModel: config.iosModel, textured: config.textured, width: config.width, height: config.height, depth: config.depth, color: config.color, subscription: config.subscription, parentOrigin: window.location.origin }; Object.keys(params).forEach(function (key) { if (params[key]) url.searchParams.set(key, params[key]); }); return url.toString(); }
   function ensureOverlay() {
     if (overlay) return;
     overlay = document.createElement("div"); overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-modal", "true"); overlay.setAttribute("aria-label", "AR-просмотр товара"); style(overlay, { position: "fixed", inset: "0", zIndex: "2147483647", display: "none", alignItems: "center", justifyContent: "center", padding: "24px", background: "rgba(18,18,15,.72)", backdropFilter: "blur(8px)" });
