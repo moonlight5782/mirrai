@@ -113,6 +113,13 @@
       "when": 1788015600000,
       "tag": "0015_alba_crossed_sled_base",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1788019200000,
+      "tag": "0016_alba_attached_cross_base",
+      "breakpoints": true
     }
   ]
 }
