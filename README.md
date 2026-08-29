@@ -123,7 +123,7 @@ The direct-site flow detects product images and GLB files automatically. GLB ope
 
 Deployment files and GPU requirements are in [`services/reconstruction`](services/reconstruction/README.md). Configure `NEXT_PUBLIC_RECONSTRUCTION_API_URL` for direct uploads on the public demo, and the server-only `RECONSTRUCTION_API_URL` plus `RECONSTRUCTION_API_TOKEN` for merchant batch jobs.
 
-The admin catalog now has a durable batch queue. An operator selects products with source photos, queues them by priority and starts or polls processing. Generated GLB files are copied into the merchant's R2 storage and always enter `review`; they never become available in the widget until an operator checks scale and materials and explicitly publishes them. Failed jobs retry up to three times.
+The admin catalog now has a durable batch queue. An operator selects products with source photos, queues them by priority and starts or polls processing. Generated GLB files are copied into the merchant's R2 storage and always enter `review`; they never become available in the widget until an operator checks scale and materials and explicitly publishes them. Failed jobs retry up to three times. Geometry-only output is rejected: a model can enter review only when the service returns a textured GLB.
 
 Four HUGGE products are preloaded as the first batch: Alba HUGGE-89990, Ria HUGGE-109553, Ria HUGGE-107376 and Blackburn HUGGE-100326. They remain visibly blocked—not falsely complete—until both the HUGGE HTTPS source and the reconstruction service are available.
 

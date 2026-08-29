@@ -57,19 +57,21 @@ export async function POST(request: Request) {
   const existing = await db.select({ productId: generationJobs.productId }).from(generationJobs).where(and(eq(generationJobs.shopId, access.shop.id), inArray(generationJobs.status, activeStatuses), inArray(generationJobs.productId, ids)));
   const busy = new Set(existing.map(item => item.productId));
   const configured = Boolean(serviceConfig());
-  const blockedBySource = access.shop.catalogSyncStatus === "blocked";
-  let created = 0; let skipped = 0;
+  let created = 0; let skipped = 0; let blockedCount = 0;
   for (const product of selected) {
     const images = imageList(product.imageUrls);
     if (!images.length || busy.has(product.id)) { skipped += 1; continue; }
+    const hasCachedSource = images.some(image => sameHost(image, new URL(request.url).origin));
+    const blockedBySource = access.shop.catalogSyncStatus === "blocked" && !hasCachedSource;
     const blocked = !configured || blockedBySource;
+    if (blocked) blockedCount += 1;
     const errorCode = !configured ? "service_not_configured" : blockedBySource ? "source_unavailable" : null;
-    const message = !configured ? "Подключите Hugging Face ZeroGPU или собственный 3D-сервер" : blockedBySource ? "Источник фотографий недоступен по HTTPS" : null;
+    const message = !configured ? "Подключите Hugging Face ZeroGPU или собственный 3D-сервер" : blockedBySource ? "Сохраните фотографию в MIRRAI: источник магазина недоступен по HTTPS" : null;
     await db.insert(generationJobs).values({ id: crypto.randomUUID(), shopId: access.shop.id, productId: product.id, status: blocked ? "blocked" : "queued", priority: Math.max(1, 100 - ids.indexOf(product.id)), sourceImages: JSON.stringify(images), errorCode, errorMessage: message });
     await db.insert(productModels).values({ productId: product.id, status: blocked ? "missing" : "queued", sourceType: "website_photo", validationMessage: message ?? "Фотографии приняты в очередь генерации", updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: productModels.productId, set: { status: blocked ? "missing" : "queued", sourceType: "website_photo", validationMessage: message ?? "Фотографии приняты в очередь генерации", updatedAt: new Date().toISOString() } });
     created += 1;
   }
-  return Response.json({ ok: true, created, skipped, blocked: !configured || blockedBySource, serviceConfigured: configured });
+  return Response.json({ ok: true, created, skipped, blocked: blockedCount > 0, serviceConfigured: configured });
 }
 
 async function runJobs(shop: typeof import("../../../../db/schema").shops.$inferSelect, appOrigin: string) {
@@ -83,25 +85,19 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
       if (["processing", "queued"].includes(job.status) && job.externalJobId) {
         const state = await pollGeneration(config, job.externalJobId);
         if (state.status === "ready" && state.model_url) { await storeGeneratedModel(shop.id, product.id, job.id, config, state.model_url, state.textured !== false); completed += 1; }
-        else if (state.status === "failed" && config.kind === "huggingface" && hfJob(job.externalJobId).operation === "generation_all") {
-          const fallbackJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin, "shape_generation");
-          await db.update(generationJobs).set({ status: "processing", externalJobId: fallbackJobId, errorCode: "texture_fallback", errorMessage: "Текстурирование временно недоступно — создаём геометрию для AR", updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
-          await db.update(productModels).set({ status: "processing", validationMessage: "Создаём геометрию; текстуру можно добавить после генерации", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id));
-          submitted += 1;
-        } else if (state.status === "failed") throw new Error(state.error || "generation_failed");
+        else if (state.status === "failed") throw new Error(state.error || "textured_generation_failed");
         continue;
       }
       await db.update(generationJobs).set({ status: "submitting", attempt: job.attempt + 1, startedAt: job.startedAt ?? new Date().toISOString(), updatedAt: new Date().toISOString(), errorCode: null, errorMessage: null }).where(eq(generationJobs.id, job.id));
-      const operation: HfOperation = config.kind === "huggingface" && job.errorCode === "texture_fallback" ? "shape_generation" : "generation_all";
+      const operation: HfOperation = "generation_all";
       const externalJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin, operation);
       await db.update(generationJobs).set({ status: "processing", externalJobId, updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
       await db.update(productModels).set({ status: "processing", validationMessage: "3D-модель создаётся", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); submitted += 1;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message.slice(0, 300) : "generation_failed";
       const retry = job.attempt + 1 < job.maxAttempts;
-      const shapeFallback = config.kind === "huggingface" && Boolean(job.externalJobId) && hfJob(job.externalJobId!).operation === "shape_generation";
-      await db.update(generationJobs).set({ status: retry ? "queued" : "failed", externalJobId: retry ? null : job.externalJobId, errorCode: shapeFallback && retry ? "texture_fallback" : "generation_failed", errorMessage: message, updatedAt: new Date().toISOString(), completedAt: retry ? null : new Date().toISOString() }).where(eq(generationJobs.id, job.id));
-      await db.update(productModels).set({ status: retry ? "queued" : "failed", validationMessage: retry ? "Повторим попытку автоматически" : "Не удалось создать модель", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); failed += 1;
+      await db.update(generationJobs).set({ status: retry ? "queued" : "failed", externalJobId: retry ? null : job.externalJobId, errorCode: "textured_generation_failed", errorMessage: message, updatedAt: new Date().toISOString(), completedAt: retry ? null : new Date().toISOString() }).where(eq(generationJobs.id, job.id));
+      await db.update(productModels).set({ status: retry ? "queued" : "failed", validationMessage: retry ? "Текстура не создана — повторим попытку автоматически" : "Не удалось создать текстурированную модель", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); failed += 1;
     }
   }
   return Response.json({ ok: true, submitted, completed, failed });
@@ -185,6 +181,7 @@ async function pollGeneration(config: ServiceConfig, externalJobId: string): Pro
 }
 
 async function storeGeneratedModel(shopId: number, productId: number, jobId: string, config: ServiceConfig, modelUrl: string, textured: boolean) {
+  if (!textured) throw new Error("untextured_model_rejected");
   let decoded = modelUrl; try { decoded = decodeURIComponent(modelUrl); } catch { /* keep original */ }
   const filePath = decoded.match(/\/tmp\/[^"'\\\s]+\.glb/i)?.[0];
   const candidates = [new URL(modelUrl, `${config.url}/`).toString()];
@@ -201,7 +198,7 @@ async function storeGeneratedModel(shopId: number, productId: number, jobId: str
   await getUploadsBucket().put(storageKey, bytes, { httpMetadata: { contentType: "model/gltf-binary" } });
   const db = getDb();
   await db.insert(assets).values({ id, shopId, productId, storageKey, fileName: `${productId}.glb`, contentType: "model/gltf-binary", sizeBytes: bytes.byteLength, kind: "glb" });
-  const validationMessage = textured ? "Текстурированная модель создана — проверьте масштаб и материалы перед публикацией" : "Геометрия создана без текстуры — доступна для AR, но требует доработки материалов";
+  const validationMessage = "Текстурированная модель создана — проверьте масштаб и материалы перед публикацией";
   await db.insert(productModels).values({ productId, status: "review", glbUrl: `/api/assets/${id}`, sourceType: "generated", validationMessage, updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: productModels.productId, set: { status: "review", glbUrl: `/api/assets/${id}`, sourceType: "generated", validationMessage, updatedAt: new Date().toISOString() } });
   await db.update(generationJobs).set({ status: "review", resultGlbUrl: `/api/assets/${id}`, updatedAt: new Date().toISOString(), completedAt: new Date().toISOString() }).where(eq(generationJobs.id, jobId));
 }
