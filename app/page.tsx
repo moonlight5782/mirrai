@@ -6,7 +6,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 type View = "landing" | "viewer";
 type UploadState = "idle" | "uploading" | "generating" | "ready" | "error";
 type Dimensions = { width: number; height: number; depth: number };
-type Product = { id: string; name: string; category: string; material: string; price: string; color: string; model: string; iosModel?: string; textured: boolean; dimensions: Dimensions };
+type ProductVariant = { id: string; sku: string; name: string; colorName: string; color: string; material: string; image?: string; model?: string; iosModel?: string; default?: boolean; available: boolean };
+type Product = { id: string; name: string; category: string; material: string; price: string; color: string; model: string; iosModel?: string; textured: boolean; dimensions: Dimensions; variants?: ProductVariant[]; selectedVariantId?: string };
 type ModelViewerElement = HTMLElement & { activateAR?: () => Promise<void>; getDimensions?: () => { x: number; y: number; z: number } };
 
 const products: Product[] = [
@@ -29,11 +30,28 @@ function positiveNumber(value: string | null, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 && parsed < 5000 ? parsed : fallback;
 }
 
+function safeVariants(value: string | null): ProductVariant[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item): ProductVariant[] => {
+      if (!item || typeof item !== "object") return [];
+      const variant = item as Record<string, unknown>;
+      const id = String(variant.id ?? "").slice(0, 80);
+      const model = safeAssetUrl(typeof variant.model === "string" ? variant.model : null, "");
+      if (!id || !/^#[0-9a-f]{6}$/i.test(String(variant.color ?? ""))) return [];
+      return [{ id, sku: String(variant.sku ?? "").slice(0, 120), name: String(variant.name ?? "").slice(0, 80), colorName: String(variant.colorName ?? variant.name ?? "Цвет").slice(0, 80), color: String(variant.color), material: String(variant.material ?? "").slice(0, 160), image: typeof variant.image === "string" ? safeAssetUrl(variant.image, "") : undefined, model: model || undefined, iosModel: typeof variant.iosModel === "string" ? safeAssetUrl(variant.iosModel, "") || undefined : undefined, default: variant.default === true, available: variant.available === true && Boolean(model) }];
+    });
+  } catch { return []; }
+}
+
 function dimensionsLabel(value: Dimensions) { return `${value.width} × ${value.depth} × ${value.height} см`; }
 
 export default function Home() {
   const [view, setView] = useState<View>("landing");
   const [active, setActive] = useState(0);
+  const [activeVariantId, setActiveVariantId] = useState("");
   const [widgetProduct, setWidgetProduct] = useState<Product | null>(null);
   const [isWidget, setIsWidget] = useState(false);
   const [subscriptionActive, setSubscriptionActive] = useState(true);
@@ -64,17 +82,22 @@ export default function Home() {
       return () => window.removeEventListener("popstate", openFromUrl);
     }
     const base = products[0];
+    const variants = safeVariants(params.get("variants"));
+    const requestedVariantId = params.get("selectedVariantId")?.slice(0, 80) ?? "";
+    const preferredVariant = variants.find(variant => variant.id === requestedVariantId && variant.available) ?? variants.find(variant => variant.default && variant.available) ?? variants.find(variant => variant.available);
     const product: Product = {
       id: params.get("productId")?.slice(0, 80) || base.id,
       name: params.get("name")?.slice(0, 120) || base.name,
       category: params.get("category")?.slice(0, 80) || base.category,
-      material: params.get("material")?.slice(0, 120) || base.material,
+      material: preferredVariant?.material || params.get("material")?.slice(0, 120) || base.material,
       price: params.get("price")?.slice(0, 50) || base.price,
-      color: /^#[0-9a-f]{6}$/i.test(params.get("color") ?? "") ? params.get("color")! : base.color,
-      model: safeAssetUrl(params.get("model"), base.model),
-      iosModel: safeAssetUrl(params.get("iosModel"), "") || undefined,
+      color: preferredVariant?.color ?? (/^#[0-9a-f]{6}$/i.test(params.get("color") ?? "") ? params.get("color")! : base.color),
+      model: preferredVariant?.model ?? safeAssetUrl(params.get("model"), base.model),
+      iosModel: preferredVariant?.iosModel ?? (safeAssetUrl(params.get("iosModel"), "") || undefined),
       textured: params.get("textured") === "1",
       dimensions: { width: positiveNumber(params.get("width"), base.dimensions.width), height: positiveNumber(params.get("height"), base.dimensions.height), depth: positiveNumber(params.get("depth"), base.dimensions.depth) },
+      variants,
+      selectedVariantId: preferredVariant?.id,
     };
     const requestedOrigin = params.get("parentOrigin");
     let verifiedOrigin = "*";
@@ -82,6 +105,7 @@ export default function Home() {
     queueMicrotask(() => {
       setTargetOrigin(verifiedOrigin);
       setWidgetProduct(product);
+      setActiveVariantId(preferredVariant?.id ?? "");
       setIsWidget(true);
       setSubscriptionActive(params.get("subscription") !== "inactive");
       setView("viewer");
@@ -90,12 +114,17 @@ export default function Home() {
 
   const catalog = useMemo(() => widgetProduct ? [widgetProduct] : products, [widgetProduct]);
   const selected = catalog[Math.min(active, catalog.length - 1)] ?? products[0];
+  const selectedVariants = selected.variants ?? [];
+  const selectedVariant = selectedVariants.find(variant => variant.id === activeVariantId && variant.available) ?? selectedVariants.find(variant => variant.id === selected.selectedVariantId && variant.available) ?? selectedVariants.find(variant => variant.default && variant.available) ?? selectedVariants.find(variant => variant.available);
   const selectedDimensions = customName ? customDimensions : selected.dimensions;
-  const modelSource = customModel || selected.model;
+  const modelSource = customModel || selectedVariant?.model || selected.model;
+  const iosModelSource = customModel ? undefined : selectedVariant?.iosModel || selected.iosModel;
+  const selectedColor = selectedVariant?.color || selected.color;
+  const selectedMaterial = selectedVariant?.material || selected.material;
 
   function emitWidgetEvent(event: string) {
     if (!isWidget || window.parent === window) return;
-    window.parent.postMessage({ source: "mirrai-widget", event, productId: selected.id, at: new Date().toISOString() }, targetOrigin);
+    window.parent.postMessage({ source: "mirrai-widget", event, productId: selected.id, variantId: selectedVariant?.id ?? null, variantSku: selectedVariant?.sku ?? null, at: new Date().toISOString() }, targetOrigin);
   }
 
   function resetCustomAsset() {
@@ -116,14 +145,19 @@ export default function Home() {
   }
 
   function selectProduct(index: number) {
-    resetCustomAsset(); setActive(index); setArStatus("Загружаем выбранную модель…");
+    resetCustomAsset(); setActive(index); setActiveVariantId(products[index]?.selectedVariantId ?? ""); setArStatus("Загружаем выбранную модель…");
     window.history.replaceState({ mirraiViewer: true }, "", `/?product=${encodeURIComponent(products[index]?.id ?? products[0].id)}`);
+  }
+
+  function selectVariant(variant: ProductVariant) {
+    if (!variant.available || !variant.model) return;
+    resetCustomAsset(); setActiveVariantId(variant.id); setArStatus(`Загружаем цвет «${variant.colorName}»…`);
   }
 
   useEffect(() => {
     if (view !== "viewer" || !arRef.current) return;
     const viewer = arRef.current;
-    const onLoad = () => { const source = viewer.getDimensions?.(); if (source?.x && source.y && source.z) { const clamp = (value: number) => Math.max(.01, Math.min(100, value)); const scale = [clamp((selectedDimensions.width / 100) / source.x), clamp((selectedDimensions.height / 100) / source.y), clamp((selectedDimensions.depth / 100) / source.z)]; viewer.setAttribute("scale", scale.map(value => value.toFixed(5)).join(" ")); } setArStatus(`${customName || selected.name} готов — масштаб ${selectedDimensions.width} × ${selectedDimensions.depth} × ${selectedDimensions.height} см`); if (isWidget && window.parent !== window) window.parent.postMessage({ source: "mirrai-widget", event: "model_ready", productId: selected.id, at: new Date().toISOString() }, targetOrigin); };
+    const onLoad = () => { const source = viewer.getDimensions?.(); if (source?.x && source.y && source.z) { const clamp = (value: number) => Math.max(.01, Math.min(100, value)); const scale = [clamp((selectedDimensions.width / 100) / source.x), clamp((selectedDimensions.height / 100) / source.y), clamp((selectedDimensions.depth / 100) / source.z)]; viewer.setAttribute("scale", scale.map(value => value.toFixed(5)).join(" ")); } setArStatus(`${customName || selected.name} · ${selectedVariant?.colorName ?? "основной цвет"} — масштаб ${selectedDimensions.width} × ${selectedDimensions.depth} × ${selectedDimensions.height} см`); if (isWidget && window.parent !== window) window.parent.postMessage({ source: "mirrai-widget", event: "model_ready", productId: selected.id, variantId: selectedVariant?.id ?? null, variantSku: selectedVariant?.sku ?? null, at: new Date().toISOString() }, targetOrigin); };
     const onError = () => setArStatus("Модель не загрузилась. Проверьте GLB/USDZ товара.");
     const onArStatus = (event: Event) => {
       const status = (event as CustomEvent<{ status: string }>).detail?.status;
@@ -133,7 +167,7 @@ export default function Home() {
     };
     viewer.addEventListener("load", onLoad); viewer.addEventListener("error", onError); viewer.addEventListener("ar-status", onArStatus);
     return () => { viewer.removeEventListener("load", onLoad); viewer.removeEventListener("error", onError); viewer.removeEventListener("ar-status", onArStatus); };
-  }, [view, modelSource, selected.id, selected.name, selectedDimensions.width, selectedDimensions.height, selectedDimensions.depth, customName, isWidget, targetOrigin]);
+  }, [view, modelSource, selected.id, selected.name, selectedVariant?.id, selectedVariant?.colorName, selectedVariant?.sku, selectedDimensions.width, selectedDimensions.height, selectedDimensions.depth, customName, isWidget, targetOrigin]);
 
   async function openAR() {
     if (photoPending) { setArStatus("Сначала дождитесь готовой 3D-модели"); return; }
@@ -179,13 +213,14 @@ export default function Home() {
       <div className="viewer-grid">
         {!isWidget && <aside className="catalog-panel"><div className="panel-title"><span>Каталог</span><small>{catalog.length} модели</small></div>{catalog.map((item, index) => <button key={item.id} className={`product ${active === index && !customName ? "active" : ""}`} onClick={() => selectProduct(index)}><i style={{ background: item.color }}><b>▰</b></i><span><small>{item.category}</small><strong>{item.name}</strong><em>{item.price}</em></span><b className="select-mark">{active === index && !customName ? "✓" : "+"}</b></button>)}</aside>}
         <div className="ar-stage">
-          {React.createElement("model-viewer", { ref: arRef, src: modelSource, "ios-src": customModel ? undefined : selected.iosModel, alt: `3D-модель ${customName || selected.name}`, ar: true, "ar-modes": "webxr scene-viewer quick-look", "ar-placement": "floor", "ar-scale": "fixed", "camera-controls": true, "touch-action": "pan-y", "shadow-intensity": "1.45", "shadow-softness": ".75", exposure, "environment-image": "neutral", "camera-orbit": "35deg 68deg auto", "field-of-view": "30deg" }, React.createElement("button", { slot: "ar-button", className: "native-ar-button" }, "Посмотреть у себя", React.createElement("span", null, "↗")))}
+          {React.createElement("model-viewer", { key: modelSource, ref: arRef, src: modelSource, "ios-src": iosModelSource, alt: `3D-модель ${customName || selected.name}${selectedVariant ? `, цвет ${selectedVariant.colorName}` : ""}`, ar: true, "ar-modes": "webxr scene-viewer quick-look", "ar-placement": "floor", "ar-scale": "fixed", "camera-controls": true, "touch-action": "pan-y", "shadow-intensity": "1.45", "shadow-softness": ".75", exposure, "environment-image": "neutral", "camera-orbit": "35deg 68deg auto", "field-of-view": "30deg" }, React.createElement("button", { slot: "ar-button", className: "native-ar-button" }, "Посмотреть у себя", React.createElement("span", null, "↗")))}
           <div className="room-preview"><i className="preview-window"/><i className="preview-floor"/><span>Вращайте модель пальцем</span></div>
           {photoPending && <div className="reconstruction-screen">{customPreview && <img src={customPreview} alt="Исходная фотография предмета"/>}<p>Создаём AR-модель</p><div className="generation-steps"><span className="done">Фото</span><span className={uploadState === "generating" ? "active" : ""}>Геометрия</span><span>PBR</span><span>GLB</span></div><small>{uploadMessage}</small></div>}
           <div className="viewer-badges"><span>{customModel ? "MODEL MATERIALS" : selected.textured ? "PBR MATERIALS" : "GEOMETRY PREVIEW"}</span><span>AR SCALE 1:1</span><span>ADAPTIVE LIGHT</span></div>
         </div>
         <aside className="details-panel">
-          <div><p className="control-label">Товар</p><h2>{customName || selected.name}</h2><p className="price">{customName ? "Пользовательская модель" : selected.price}</p><div className="material-row"><i style={{ background: selected.color }}/><span>{selected.material}</span></div></div>
+          <div><p className="control-label">Товар</p><h2>{customName || selected.name}</h2><p className="price">{customName ? "Пользовательская модель" : selected.price}</p><div className="material-row"><i style={{ background: selectedColor }}/><span>{selectedMaterial}</span></div></div>
+          {!customName && selectedVariants.length > 0 && <div className="variant-selector"><p className="control-label">Цвет на сайте магазина</p><div className="variant-swatches" role="list" aria-label="Доступные цвета товара">{selectedVariants.map(variant => <button key={variant.id} type="button" title={variant.available ? variant.colorName : `${variant.colorName} — 3D готовится`} aria-label={variant.available ? `Выбрать цвет ${variant.colorName}` : `${variant.colorName}: 3D-модель ещё не готова`} aria-pressed={selectedVariant?.id === variant.id} disabled={!variant.available} className={selectedVariant?.id === variant.id ? "active" : ""} onClick={() => selectVariant(variant)}><i style={{ background: variant.color }}/><span>{variant.colorName}</span>{!variant.available && <small>3D готовится</small>}</button>)}</div><p className="variant-note">В AR открывается отдельная модель выбранного магазином варианта, а не приблизительная перекраска.</p></div>}
           <div><p className="control-label">Габариты · Ш × Г × В</p><strong className="dimensions">{dimensionsLabel(selectedDimensions)}</strong><p className="hint">Модель зафиксирована в указанном масштабе. Покупатель не может случайно изменить размер в AR.</p></div>
           <div><p className="control-label">Освещение превью</p><div className="range-row"><input aria-label="Экспозиция 3D-превью" type="range" min="0.65" max="1.35" step="0.05" value={exposure} onChange={event => setExposure(Number(event.target.value))}/><span>{Math.round(exposure * 100)}%</span></div><p className="hint">В системном AR свет и цвет адаптируются камерой устройства автоматически.</p></div>
           {!isWidget && <div className="asset-upload"><p className="control-label">Тест своего товара</p><div className="dimension-inputs">{(["width", "depth", "height"] as const).map((key, index) => <label key={key}><span>{["Ш", "Г", "В"][index]}, см</span><input type="number" min="1" max="5000" value={customDimensions[key]} onChange={event => setCustomDimensions(current => ({ ...current, [key]: positiveNumber(event.target.value, current[key]) }))}/></label>)}</div><label className="upload-button"><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,.glb" onChange={event => handleAsset(event.target.files?.[0])}/><span>＋</span><b>Фото товара или готовый GLB</b></label>{customPreview && <img className="upload-preview" src={customPreview} alt="Загруженный товар"/>}{uploadState !== "idle" && <div className={`asset-result ${uploadState}`}><span>{uploadState === "ready" ? "✓" : uploadState === "error" ? "!" : "•••"}</span><div><strong>{customName}</strong><small>{uploadMessage}</small></div></div>}</div>}

@@ -80,7 +80,7 @@ test("admin catalog is backed by durable model lifecycle data", async () => {
   assert.match(admin, /Без модели/);
   assert.match(admin, /Опубликована/);
   assert.match(configRoute, /subscriptionStatus/);
-  assert.match(configRoute, /status !== "published"/);
+  assert.match(configRoute, /status === "published"/);
   assert.match(migration, /CLOUD-001/);
 });
 
@@ -147,8 +147,27 @@ test("commercial pilot architecture supports tenants, imports, R2 assets and sca
   ]);
   assert.match(schema, /shopMembers/); assert.match(schema, /shopInvites/); assert.match(schema, /platformOperators/); assert.match(schema, /export const assets/);
   assert.match(auth, /acceptInvites/); assert.match(clients, /ownerEmail/); assert.match(importer, /parseCsv/); assert.match(upload, /getUploadsBucket/);
-  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "1\.1\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
+  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "1\.2\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
   assert.match(hosting, /"r2": "UPLOADS"/); assert.match(migration, /CREATE TABLE `assets`/);
+});
+
+test("storefront color variants select their corresponding 3D and AR models", async () => {
+  const [schema, migration, storefront, widgetRoute, sdk, viewer, store] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0018_product_color_variants.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/storefront/catalog/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/widget/config/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /productVariants/); assert.match(schema, /colorName/); assert.match(schema, /modelStatus/);
+  assert.match(migration, /HUGGE-89990-VIC-28/); assert.match(migration, /Тёмно-серый VIC 28/); assert.match(migration, /alba-chair-hunyuan2mv-pbr\.glb/);
+  assert.match(storefront, /variantsByProduct/); assert.match(storefront, /selectedVariantId/);
+  assert.match(widgetRoute, /requestedVariantId/); assert.match(widgetRoute, /productVariants\.sku/);
+  assert.match(sdk, /JSON\.stringify\(config\.variants\)/); assert.match(sdk, /selectedVariantId/);
+  assert.match(viewer, /variant-selector/); assert.match(viewer, /selectVariant/); assert.match(viewer, /iosModelSource/);
+  assert.match(store, /store-variant-picker/); assert.match(store, /selectedVariantId/);
 });
 
 test("store owners receive installable WooCommerce and Shopify integrations", async () => {

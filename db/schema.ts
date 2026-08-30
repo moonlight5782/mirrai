@@ -81,6 +81,29 @@ export const productModels = sqliteTable("product_models", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_product_models_product").on(table.productId), index("idx_product_models_status").on(table.status)]);
 
+export const productVariants = sqliteTable("product_variants", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  externalId: text("external_id"),
+  sku: text("sku").notNull(),
+  name: text("name").notNull(),
+  colorName: text("color_name").notNull(),
+  colorHex: text("color_hex").notNull().default("#777777"),
+  material: text("material").notNull().default(""),
+  imageUrl: text("image_url"),
+  glbUrl: text("glb_url"),
+  usdzUrl: text("usdz_url"),
+  modelStatus: text("model_status").notNull().default("missing"),
+  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [
+  uniqueIndex("idx_product_variants_product_sku").on(table.productId, table.sku),
+  index("idx_product_variants_product_active_sort").on(table.productId, table.active, table.sortOrder),
+]);
+
 export const generationJobs = sqliteTable("generation_jobs", {
   id: text("id").primaryKey(),
   shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
