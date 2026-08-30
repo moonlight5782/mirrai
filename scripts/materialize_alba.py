@@ -75,15 +75,12 @@ def main() -> None:
     )
     metal_faces = close_face_mask(metal_seed, mesh.face_adjacency, iterations=2)
 
-    # The dark reference-photo shadow below the cushion is not a metal part.
-    # Keep the central upholstered seat edge fabric-coloured while retaining
-    # the true outer mounting tubes and the frame below it.
-    cushion_edge = (
-        (height > 0.235) & (height < 0.405) & (outer < 0.68)
-    ) | (
-        (height > 0.145) & (height < 0.43) & (centers[:, 2] > -0.25)
-    )
-    metal_faces[cushion_edge] = False
+    # The generated frame ends below the lowest upholstered surface. Protect
+    # everything above that measured boundary from the metal mask. This removes
+    # the photograph's dark seat shadow from every viewing angle and prevents
+    # it from becoming a jagged black band in the PBR model.
+    upholstery_boundary_m = 0.235
+    metal_faces[centers[:, 1] > upholstery_boundary_m] = False
     fabric_faces = ~metal_faces
 
     fabric = mesh.submesh([fabric_faces], append=True, repair=False)
