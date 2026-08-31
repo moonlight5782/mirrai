@@ -1,0 +1,16 @@
+UPDATE `products` SET `price`='4 100 Lei',`image_urls`='["/catalog-sources/hugge-md/98232-1.jpg"]' WHERE `sku`='HUGGE-98232';
+UPDATE `products` SET `price`='25 260 Lei',`image_urls`='["/catalog-sources/hugge-md/100326-1.jpg"]' WHERE `sku`='HUGGE-100326';
+UPDATE `products` SET `price`='15 800 Lei',`image_urls`='["/catalog-sources/hugge-md/111240-1.jpg"]' WHERE `sku`='HUGGE-111240';
+UPDATE `products` SET `price`='15 500 Lei',`image_urls`='["/catalog-sources/hugge-md/109553-1.jpg"]' WHERE `sku`='HUGGE-109553';
+UPDATE `products` SET `price`='4 900 Lei',`image_urls`='["/catalog-sources/hugge-md/108501-1.jpg"]' WHERE `sku`='HUGGE-108501';
+UPDATE `products` SET `price`='16 550 Lei',`image_urls`='["/catalog-sources/hugge-md/107376-1.jpg"]' WHERE `sku`='HUGGE-107376';
+UPDATE `products` SET `price`='3 550 Lei',`image_urls`='["/catalog-sources/hugge-md/102923-1.jpg"]' WHERE `sku`='HUGGE-102923';
+UPDATE `products` SET `price`='5 800 Lei',`image_urls`='["/catalog-sources/hugge-md/100489-1.jpg"]' WHERE `sku`='HUGGE-100489';
+UPDATE `products` SET `price`='15 500 Lei',`image_urls`='["/catalog-sources/hugge-md/98600-1.jpg"]' WHERE `sku`='HUGGE-98600';
+UPDATE `products` SET `price`='5 100 Lei',`image_urls`='["/catalog-sources/hugge-md/90157-1.jpg"]' WHERE `sku`='HUGGE-90157';
+UPDATE `products` SET `price`='5 100 Lei',`image_urls`='["/catalog-sources/hugge-md/89099-1.jpg"]' WHERE `sku`='HUGGE-89099';
+UPDATE `products` SET `price`='7 200 Lei',`image_urls`='["/catalog-sources/hugge-md/71939-1.jpg"]' WHERE `sku`='HUGGE-71939';
+UPDATE `products` SET `price`='7 800 Lei',`image_urls`='["/catalog-sources/hugge-md/35348-1.jpg"]' WHERE `sku`='HUGGE-35348';
+UPDATE `products` SET `price`='6 600 Lei',`image_urls`='["/catalog-sources/hugge-md/alba-89990-1.jpg","/catalog-sources/hugge-md/alba-89990-2.jpg","/catalog-sources/hugge-md/alba-89990-3.jpg"]' WHERE `sku`='HUGGE-89990';
+UPDATE `products` SET `price`='3 550 Lei',`image_urls`='["/catalog-sources/hugge-md/90315-1.jpg"]' WHERE `sku`='HUGGE-90315';
+UPDATE `products` SET `price`='4 900 Lei',`image_urls`='["/catalog-sources/hugge-md/85345-1.jpg","/catalog-sources/hugge-md/85345-2.jpg","/catalog-sources/hugge-md/85345-3.jpg","/catalog-sources/hugge-md/85345-4.jpg"]' WHERE `sku`='HUGGE-85345';
