@@ -235,3 +235,8 @@ test("batch 3D generation requires texture and never publishes unreviewed models
   assert.match(albaMultiview, /TARGET_EXTENTS/); assert.match(albaMultiview, /Alba grey velvet/); assert.match(albaMultiview, /Alba matte black metal/);
   assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
 });
+
+test("demo widget preserves known product width when depth is missing", async () => {
+  const store = await readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8");
+  assert.match(store, /selected\.depth \|\| selected\.width \|\| 80/);
+});
