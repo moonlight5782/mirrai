@@ -35,6 +35,7 @@ function serviceConfig(): ServiceConfig | null {
 function headers(token?: string) { return token ? { authorization: `Bearer ${token}` } : undefined; }
 function imageList(value: string) { try { return (JSON.parse(value) as unknown[]).filter((url): url is string => typeof url === "string" && (/^https:\/\//i.test(url) || (url.startsWith("/") && !url.startsWith("//")))).slice(0, 8); } catch { return []; } }
 function hfOperation(config: ServiceConfig): HfOperation { return config.kind === "huggingface" && config.url.includes("stable-fast-3d") ? "run_button" : "generation_all"; }
+function isHunyuan(config: ServiceConfig) { return config.kind === "huggingface" && config.url.toLowerCase().includes("hunyuan3d"); }
 
 export async function GET(request: Request) {
   const user = await getChatGPTUser();
@@ -80,6 +81,9 @@ export async function POST(request: Request) {
 async function runJobs(shop: typeof import("../../../../db/schema").shops.$inferSelect, appOrigin: string) {
   const config = serviceConfig();
   if (!config) return Response.json({ error: "service_not_configured" }, { status: 503 });
+  if (shop.slug === "hugge-md" && !isHunyuan(config)) {
+    return Response.json({ error: "hugge_requires_hunyuan3d", message: "Для HUGGE разрешена только генерация Hunyuan3D-2.1" }, { status: 503 });
+  }
   const db = getDb();
   const rows = await db.select({ job: generationJobs, product: products }).from(generationJobs).innerJoin(products, eq(generationJobs.productId, products.id)).where(and(eq(generationJobs.shopId, shop.id), inArray(generationJobs.status, ["queued", "processing", "blocked"]))).orderBy(desc(generationJobs.priority)).limit(config.kind === "huggingface" ? 1 : 3);
   let submitted = 0; let completed = 0; let failed = 0;
@@ -102,7 +106,7 @@ async function runJobs(shop: typeof import("../../../../db/schema").shops.$infer
       const operation = hfOperation(config);
       const externalJobId = await submitProductImage(config, shop, product, job.sourceImages, appOrigin, operation);
       await db.update(generationJobs).set({ status: "processing", externalJobId, updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, job.id));
-      await db.update(productModels).set({ status: "processing", validationMessage: "3D-модель создаётся", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); submitted += 1;
+      await db.update(productModels).set({ status: "processing", validationMessage: isHunyuan(config) ? "Hunyuan3D-2.1 создаёт геометрию и PBR-текстуры" : "3D-модель создаётся", updatedAt: new Date().toISOString() }).where(eq(productModels.productId, product.id)); submitted += 1;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message.slice(0, 300) : "generation_failed";
       const retry = job.attempt + 1 < job.maxAttempts;
@@ -257,7 +261,9 @@ async function storeGeneratedModel(shopId: number, productId: number, jobId: str
   await getUploadsBucket().put(storageKey, bytes, { httpMetadata: { contentType: "model/gltf-binary" } });
   const db = getDb();
   await db.insert(assets).values({ id, shopId, productId, storageKey, fileName: `${productId}.glb`, contentType: "model/gltf-binary", sizeBytes: bytes.byteLength, kind: "glb" });
-  const validationMessage = "Текстурированная модель создана — проверьте масштаб и материалы перед публикацией";
+  const validationMessage = isHunyuan(config)
+    ? "Hunyuan3D-2.1: текстурированная PBR-модель создана — проверьте геометрию, масштаб и материалы перед публикацией"
+    : "Текстурированная модель создана — проверьте масштаб и материалы перед публикацией";
   await db.insert(productModels).values({ productId, status: "review", glbUrl: `/api/assets/${id}`, sourceType: "generated", validationMessage, updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: productModels.productId, set: { status: "review", glbUrl: `/api/assets/${id}`, sourceType: "generated", validationMessage, updatedAt: new Date().toISOString() } });
   await db.update(generationJobs).set({ status: "review", resultGlbUrl: `/api/assets/${id}`, updatedAt: new Date().toISOString(), completedAt: new Date().toISOString() }).where(eq(generationJobs.id, jobId));
 }
