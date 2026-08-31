@@ -217,6 +217,7 @@ test("batch 3D generation requires texture and never publishes unreviewed models
   ]);
   assert.match(schema, /generationJobs/); assert.match(migration, /hugge-alba-89990/); assert.match(route, /RECONSTRUCTION_API_URL/); assert.match(route, /HUGGINGFACE_SPACE_URL/); assert.match(route, /generation_all/); assert.match(route, /shape_generation/); assert.match(route, /run_button/); assert.match(route, /stable-fast-3d/); assert.match(route, /hugge_requires_hunyuan3d/); assert.match(route, /Remove Background/); assert.match(route, /queue\/join/); assert.match(route, /queue\/data/); assert.match(route, /untextured_model_rejected/);
   assert.match(cachedSource, /catalog-sources\/hugge-md\/alba-89990-1\.jpg/); assert.match(cachedSource, /`status`='queued'/); assert.match(route, /config\.kind === "huggingface" \? 1 : 3/); assert.match(route, /sameHost\(imageUrl, appOrigin\)/);
+  assert.match(route, /image\.startsWith\("\/"\) \|\| sameHost/);
   assert.match(restoredJob, /INSERT OR IGNORE INTO `generation_jobs`/); assert.match(restoredJob, /hugge-alba-89990/);
   assert.match(shapeRetry, /`error_code`='texture_fallback'/); assert.match(route, /function findGlb/); assert.match(route, /findGlb\(data\[1\]\)/);
   assert.match(downloadRetry, /Gradio file proxy/); assert.match(route, /gradio_api\/file=/); assert.match(route, /call\/\$\{textured \? "all" : "shape"\}\/file=/);

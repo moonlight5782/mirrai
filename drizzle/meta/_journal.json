@@ -162,6 +162,13 @@
       "when": 1788181200000,
       "tag": "0022_fix_hugge_polo_dimensions",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1788184800000,
+      "tag": "0023_retry_hugge_black_polo_hunyuan",
+      "breakpoints": true
     }
   ]
 }

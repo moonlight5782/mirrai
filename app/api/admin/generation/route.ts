@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   for (const product of selected) {
     const images = imageList(product.imageUrls);
     if (!images.length || busy.has(product.id)) { skipped += 1; continue; }
-    const hasCachedSource = images.some(image => sameHost(image, new URL(request.url).origin));
+    const hasCachedSource = images.some(image => image.startsWith("/") || sameHost(image, new URL(request.url).origin));
     const blockedBySource = access.shop.catalogSyncStatus === "blocked" && !hasCachedSource;
     const blocked = !configured || blockedBySource;
     if (blocked) blockedCount += 1;
