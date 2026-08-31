@@ -141,6 +141,13 @@
       "when": 1788170400000,
       "tag": "0019_hugge_demo_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1788174000000,
+      "tag": "0020_queue_hugge_catalog",
+      "breakpoints": true
     }
   ]
 }

@@ -33,7 +33,7 @@ function serviceConfig(): ServiceConfig | null {
 }
 
 function headers(token?: string) { return token ? { authorization: `Bearer ${token}` } : undefined; }
-function imageList(value: string) { try { return (JSON.parse(value) as unknown[]).filter((url): url is string => typeof url === "string" && url.startsWith("https://")).slice(0, 8); } catch { return []; } }
+function imageList(value: string) { try { return (JSON.parse(value) as unknown[]).filter((url): url is string => typeof url === "string" && (/^https:\/\//i.test(url) || (url.startsWith("/") && !url.startsWith("//")))).slice(0, 8); } catch { return []; } }
 function hfOperation(config: ServiceConfig): HfOperation { return config.kind === "huggingface" && config.url.includes("stable-fast-3d") ? "run_button" : "generation_all"; }
 
 export async function GET(request: Request) {
@@ -117,8 +117,10 @@ function sameHost(imageUrl: string, websiteUrl: string | null) { try { return Bo
 
 async function submitProductImage(config: ServiceConfig, shop: typeof import("../../../../db/schema").shops.$inferSelect, product: typeof products.$inferSelect, sourceImages: string, appOrigin: string, operation: HfOperation = "generation_all") {
   const imageUrl = imageList(sourceImages)[0];
-  if (!imageUrl || (!sameHost(imageUrl, shop.websiteUrl) && !sameHost(imageUrl, appOrigin))) throw new Error("invalid_source_image");
-  const source = await fetch(imageUrl);
+  const isLocalImage = Boolean(imageUrl?.startsWith("/")) || Boolean(imageUrl && sameHost(imageUrl, appOrigin));
+  const resolvedImageUrl = imageUrl ? new URL(imageUrl, appOrigin).toString() : "";
+  if (!resolvedImageUrl || (!isLocalImage && !sameHost(resolvedImageUrl, shop.websiteUrl))) throw new Error("invalid_source_image");
+  const source = await fetch(resolvedImageUrl);
   if (!source.ok) throw new Error(`source_${source.status}`);
   const bytes = await source.arrayBuffer();
   if (bytes.byteLength < 100 || bytes.byteLength > 20_000_000) throw new Error("invalid_source_size");
