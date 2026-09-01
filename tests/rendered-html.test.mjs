@@ -253,4 +253,6 @@ test("generation queue advances without an open admin page", async () => {
   assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/);
   assert.match(workflow, /id-token: write/);
   assert.match(workflow, /api\/internal\/generation\/tick/);
+  assert.match(workflow, /ticks=100/);
+  assert.match(workflow, /sleep 120/);
 });

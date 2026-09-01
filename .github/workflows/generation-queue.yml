@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      continuous:
+        description: "Keep advancing the queue for the current catalogue batch"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,19 +22,27 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 220
     steps:
       - name: Poll Hunyuan and advance one product
         shell: bash
         run: |
           set -euo pipefail
-          token_response="$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=mirrai-generation")"
-          oidc_token="$(printf '%s' "$token_response" | jq -er '.value')"
-          curl --fail-with-body --silent --show-error \
-            --retry 2 --retry-delay 10 --max-time 90 \
-            -X POST \
-            -H "Authorization: Bearer ${oidc_token}" \
-            -H "Content-Type: application/json" \
-            https://mirrai-try-on.moonlight-5782.chatgpt.site/api/internal/generation/tick
+          ticks=1
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${{ inputs.continuous }}" == "true" ]]; then
+            ticks=100
+          fi
+          for tick in $(seq 1 "$ticks"); do
+            echo "Queue tick ${tick}/${ticks}"
+            token_response="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=mirrai-generation")"
+            oidc_token="$(printf '%s' "$token_response" | jq -er '.value')"
+            curl --fail-with-body --silent --show-error \
+              --retry 2 --retry-delay 10 --max-time 90 \
+              -X POST \
+              -H "Authorization: Bearer ${oidc_token}" \
+              -H "Content-Type: application/json" \
+              https://mirrai-try-on.moonlight-5782.chatgpt.site/api/internal/generation/tick
+            if [[ "$tick" -lt "$ticks" ]]; then sleep 120; fi
+          done
