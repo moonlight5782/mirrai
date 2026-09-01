@@ -78,7 +78,7 @@ export async function POST(request: Request) {
   return Response.json({ ok: true, created, skipped, blocked: blockedCount > 0, serviceConfigured: configured });
 }
 
-async function runJobs(shop: typeof import("../../../../db/schema").shops.$inferSelect, appOrigin: string) {
+export async function runJobs(shop: typeof import("../../../../db/schema").shops.$inferSelect, appOrigin: string) {
   const config = serviceConfig();
   if (!config) return Response.json({ error: "service_not_configured" }, { status: 503 });
   if (shop.slug === "hugge-md" && !isHunyuan(config)) {

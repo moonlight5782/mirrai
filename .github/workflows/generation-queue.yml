@@ -1,0 +1,34 @@
+name: MIRRAI generation queue
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: mirrai-generation-queue
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Poll Hunyuan and advance one product
+        shell: bash
+        run: |
+          set -euo pipefail
+          token_response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=mirrai-generation")"
+          oidc_token="$(printf '%s' "$token_response" | jq -er '.value')"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 10 --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer ${oidc_token}" \
+            -H "Content-Type: application/json" \
+            https://mirrai-try-on.moonlight-5782.chatgpt.site/api/internal/generation/tick

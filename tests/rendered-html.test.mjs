@@ -241,3 +241,16 @@ test("demo widget preserves known product width when depth is missing", async ()
   const store = await readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8");
   assert.match(store, /selected\.depth \|\| selected\.width \|\| 80/);
 });
+
+test("generation queue advances without an open admin page", async () => {
+  const [tick, workflow] = await Promise.all([
+    readFile(new URL("../app/api/internal/generation/tick/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/generation-queue.yml", import.meta.url), "utf8"),
+  ]);
+  assert.match(tick, /token\.actions\.githubusercontent\.com/);
+  assert.match(tick, /workflow_ref/);
+  assert.match(tick, /runJobs\(shop/);
+  assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/);
+  assert.match(workflow, /id-token: write/);
+  assert.match(workflow, /api\/internal\/generation\/tick/);
+});
