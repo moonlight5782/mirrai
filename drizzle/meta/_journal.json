@@ -176,6 +176,13 @@
       "when": 1788188400000,
       "tag": "0024_prioritize_black_polo_preserve_alba",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1788288824461,
+      "tag": "0025_publish_alba_trellis2_q8_pbr",
+      "breakpoints": true
     }
   ]
 }
