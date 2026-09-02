@@ -185,7 +185,7 @@ async function pollHfQueue(config: ServiceConfig, sessionHash: string, eventId: 
     const response = await fetch(`${config.url}/queue/data?session_hash=${encodeURIComponent(sessionHash)}`, { headers: { ...(headers(config.token) ?? {}), accept: "text/event-stream" }, signal: controller.signal });
     if (!response.ok) throw new Error(`hf_queue_status_${response.status}`);
     const reader = response.body?.getReader(); const decoder = new TextDecoder();
-    while (reader) { const next = await reader.read(); if (next.done) break; payload += decoder.decode(next.value, { stream: true }); if (payload.includes(`\"event_id\":\"${eventId}\"`) && payload.includes('"msg":"process_completed"')) break; }
+    while (reader) { const next = await reader.read(); if (next.done) break; payload += decoder.decode(next.value, { stream: true }); if (payload.includes(`"event_id":"${eventId}"`) && payload.includes('"msg":"process_completed"')) break; }
   } catch (cause) { if (!(cause instanceof DOMException && cause.name === "AbortError")) throw cause; }
   finally { clearTimeout(timeout); }
   const messages = payload.split(/\r?\n/).filter(line => line.startsWith("data: ")).flatMap(line => { try { return [JSON.parse(line.slice(6)) as HfQueueMessage]; } catch { return []; } });

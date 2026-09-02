@@ -11,6 +11,7 @@
     "start": "vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public",
+    "models:optimize-hugge": "node scripts/optimize_hugge_models.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

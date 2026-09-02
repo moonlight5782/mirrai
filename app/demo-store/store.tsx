@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-html-link-for-pages -- full navigation avoids a Vinext dev-runtime duplicate React bundle */
 /* eslint-disable @next/next/no-img-element -- merchant catalog images are data-driven */
 
 import { useEffect, useMemo, useState } from "react";

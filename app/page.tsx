@@ -1,5 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-html-link-for-pages -- viewer exit intentionally performs a full navigation */
+/* eslint-disable @next/next/no-img-element -- previews may be local object URLs or merchant-hosted images */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
