@@ -44,6 +44,7 @@ yarn-error.log*
 # local 3D and deployment workspaces
 /.mesh-tools/
 /.tmp-*
+/.dist-build-backup-*/
 /.hf-space-*/
 /.site-package-stage-*/
 /.openai/*.tar.gz
