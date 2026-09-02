@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-html-link-for-pages -- full navigation avoids a Vinext dev-runtime duplicate React bundle */
 /* eslint-disable @next/next/no-img-element -- merchant catalog images are data-driven */
 
 import { useEffect, useMemo, useState } from "react";
@@ -76,6 +77,6 @@ export function DemoStore() {
     </section> : null}
 
     <section className="integration-card"><div><p>HUGGE × MIRRAI</p><h2>Один каталог.<br/>Один AR-виджет.</h2></div><div><p>Товары связываются по SKU. Магазин управляет каталогом как обычно, а MIRRAI автоматически показывает кнопку примерки только там, где готова и проверена соответствующая 3D-модель.</p><code>SKU → фото → GLB → проверка → AR</code></div></section>
-    <footer className="demo-footer"><b>HUGGE.MD</b><span>Демонстрационная витрина для презентации интеграции</span>{/* eslint-disable-next-line @next/next/no-html-link-for-pages */}<a href="/">Технология MIRRAI ↗</a></footer>
+    <footer className="demo-footer"><b>HUGGE.MD</b><span>Демонстрационная витрина для презентации интеграции</span><a href="/">Технология MIRRAI ↗</a></footer>
   </main>;
 }
