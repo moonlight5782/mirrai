@@ -54,6 +54,16 @@ test("HUGGE demo reads real products and model states from the shared catalogue"
   assert.match(route, /published/);
 });
 
+test("HUGGE product cards provide a navigable full-screen photo gallery", async () => {
+  const store = await readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8");
+  assert.match(store, /galleryImages/);
+  assert.match(store, /Предыдущая фотография/);
+  assert.match(store, /Следующая фотография/);
+  assert.match(store, /photo-lightbox/);
+  assert.match(store, /keyboardEvent\.key === "Escape"/);
+  assert.match(store, /onTouchStart/);
+});
+
 test("embeddable SDK creates a product-aware accessible AR launcher", async () => {
   const sdk = await readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8");
   assert.match(sdk, /window\.MirraiWidget/);
