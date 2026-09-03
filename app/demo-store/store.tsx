@@ -104,7 +104,7 @@ export function DemoStore() {
       <button className="back-to-catalog" onClick={() => setDetailOpen(false)}>← Вернуться в каталог</button>
       <div className="product-layout"><div className="product-gallery">
         <div className="main-product-image">
-          {activeImage ? <button type="button" className="main-product-image-button" onClick={() => setLightboxOpen(true)} aria-label={`Открыть фотографию ${activeImageIndex + 1} товара ${selected.name}`}><img src={activeImage} alt={`${selected.name}, фото ${activeImageIndex + 1}`}/><b className="image-zoom-hint">Увеличить ↗</b></button> : <div className="missing-product-image">Фотография готовится</div>}
+          {activeImage ? <button type="button" className="main-product-image-button" onClick={() => setLightboxOpen(true)} aria-label={`Открыть фотографию ${activeImageIndex + 1} товара ${selected.name}`}><img src={activeImage} alt={`${selected.name}, фото ${activeImageIndex + 1}`}/></button> : <div className="missing-product-image">Фотография готовится</div>}
           <span className={selected.demoAvailable ? "ready" : ""}>{selected.demoAvailable ? "AR ДОСТУПЕН" : statusLabels[selected.modelStatus]}</span>
           {galleryImages.length > 1 && <div className="gallery-arrows"><button type="button" onClick={showPreviousImage} aria-label="Предыдущая фотография">←</button><span>{activeImageIndex + 1} / {galleryImages.length}</span><button type="button" onClick={showNextImage} aria-label="Следующая фотография">→</button></div>}
         </div>
