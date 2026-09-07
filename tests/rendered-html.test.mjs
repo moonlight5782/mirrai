@@ -27,6 +27,10 @@ test("widget contract includes product data, scale and store events", async () =
   assert.match(page, /params\.get\("iosModel"\)/);
   assert.match(page, /getDimensions/);
   assert.match(page, /"ar-scale": "fixed"/);
+  assert.match(page, /"disable-zoom": true/);
+  assert.match(page, /"tone-mapping": "neutral"/);
+  assert.match(page, /"xr-environment": true/);
+  assert.match(page, /"shadow-intensity": "\.92"/);
   assert.match(page, /mirrai-widget/);
   assert.match(page, /object_placed/);
   assert.match(page, /subscription.*inactive/);
