@@ -13,6 +13,7 @@ const eslintConfig = defineConfig([
     "dist/**",
     ".dist-build-backup-*/**",
     ".wrangler/**",
+    ".site-package-stage-*/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
