@@ -4,7 +4,7 @@ export function widgetCors(request: Request) {
 }
 
 export function widgetJson(request: Request, body: unknown, init: ResponseInit = {}) {
-  return Response.json(body, { ...init, headers: { ...widgetCors(request), ...(init.headers ?? {}) } });
+  return Response.json(body, { ...init, headers: { ...widgetCors(request), "Cache-Control": "no-store", ...(init.headers ?? {}) } });
 }
 
 export function widgetOptions(request: Request) {

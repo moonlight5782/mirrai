@@ -93,7 +93,8 @@ test("admin catalog is backed by durable model lifecycle data", async () => {
   assert.match(schema, /widgetEvents/);
   assert.match(admin, /Без модели/);
   assert.match(admin, /Опубликована/);
-  assert.match(configRoute, /subscriptionStatus/);
+  assert.match(configRoute, /subscriptionAccess/);
+  assert.match(configRoute, /!access.allowed/);
   assert.match(configRoute, /status === "published"/);
   assert.match(migration, /CLOUD-001/);
 });

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if (!name || slug.length < 3 || !/^\S+@\S+\.\S+$/.test(ownerEmail)) return Response.json({ error: "invalid_payload" }, { status: 400 });
   const db = getDb();
   try {
-    const [created] = await db.insert(shops).values({ name, slug, subscriptionStatus: "trial", websiteUrl: body.websiteUrl?.trim().slice(0, 300) || null, plan: "pilot" }).returning();
+    const [created] = await db.insert(shops).values({ name, slug, subscriptionStatus: "trial", trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString(), websiteUrl: body.websiteUrl?.trim().slice(0, 300) || null, plan: "pilot" }).returning();
     await db.insert(shopInvites).values({ shopId: created.id, email: ownerEmail, role: "owner" });
     return Response.json({ ok: true, shop: created }, { status: 201 });
   } catch { return Response.json({ error: "slug_exists" }, { status: 409 }); }

@@ -18,10 +18,41 @@
   }
   function closeModal() { if (!overlay || !iframe) return; overlay.style.display = "none"; iframe.src = "about:blank"; document.body.style.overflow = ""; if (activeInstance) activeInstance.button.focus(); activeInstance = null; }
   function record(instance, event) { var config = instance.config; if (!config.shopId || !config.sku) return; fetch(new URL("/api/widget/events", scriptOrigin), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shopId: config.shopId, sku: config.sku, event: event }), keepalive: true }).catch(function () {}); }
-  function openInstance(instance) { var config = instance.config, url = viewerUrl(config), mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); activeInstance = instance; window.dispatchEvent(new CustomEvent("mirrai:event", { detail: { event: "widget_open", productId: config.productId } })); record(instance, "widget_open"); if (config.mode === "link" || (config.mode === "auto" && mobile)) { window.open(url, "_blank", "noopener,noreferrer"); return; } ensureOverlay(); iframe.title = "MIRRAI — " + config.name; iframe.src = url; overlay.style.display = "flex"; document.body.style.overflow = "hidden"; closeButton.focus(); }
+  async function openInstance(instance) {
+    if (instance.opening) return;
+    instance.opening = true;
+    var mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    var useTab = instance.config.mode === "link" || (instance.config.mode === "auto" && mobile);
+    // Reserve the mobile tab during the tap; async checks otherwise trigger popup blocking.
+    var pendingTab = useTab ? window.open("about:blank", "_blank") : null;
+    if (pendingTab) pendingTab.opener = null;
+    try {
+      await resolveInstances([instance]);
+      if (instance.config.shopId && instance.config.sku && !instance.ready) { if (pendingTab) pendingTab.close(); return; }
+      var config = instance.config, url = viewerUrl(config);
+      activeInstance = instance;
+      window.dispatchEvent(new CustomEvent("mirrai:event", { detail: { event: "widget_open", productId: config.productId } }));
+      record(instance, "widget_open");
+      if (useTab) { if (pendingTab) pendingTab.location.replace(url); else window.location.assign(url); return; }
+      ensureOverlay(); iframe.title = "MIRRAI — " + config.name; iframe.src = url; overlay.style.display = "flex"; document.body.style.overflow = "hidden"; closeButton.focus();
+    } finally { instance.opening = false; }
+  }
   function createInstance(input) { var config = Object.assign({}, defaults, dataConfig(script), input || {}); var target = typeof config.target === "string" ? document.querySelector(config.target) : config.target; if (!target) target = script && script.parentElement ? script.parentElement : document.body; var button = document.createElement("button"); button.type = "button"; button.setAttribute("aria-label", config.label + ": " + config.name); button.textContent = config.label + "  ↗"; style(button, { width: "100%", minHeight: "50px", border: "0", background: "#181814", color: "#fff", padding: "14px 18px", font: "600 14px/1.2 Arial,sans-serif", letterSpacing: ".01em", cursor: "pointer" }); target.appendChild(button); var instance = { config: config, target: target, button: button }; instances.push(instance); if (config.shopId && config.sku && !config.model) button.style.display = "none"; button.addEventListener("click", function () { openInstance(instance); }); return instance; }
-  function applyResult(instance, result, subscriptionActive) { if (!subscriptionActive) { instance.button.textContent = "Вы прекрасно выглядите в любой одежде"; instance.button.disabled = true; instance.button.style.display = "block"; return; } if (!result || !result.available) { instance.button.style.display = "none"; return; } instance.config = Object.assign(instance.config, result); instance.button.disabled = false; instance.button.textContent = instance.config.label + "  ↗"; instance.button.setAttribute("aria-label", instance.config.label + ": " + instance.config.name); instance.button.style.display = "block"; }
-  function resolveInstances(list) { var unresolved = list.filter(function (item) { return item.config.shopId && item.config.sku && !item.config.model; }); if (!unresolved.length) return Promise.resolve(); var groups = {}; unresolved.forEach(function (item) { (groups[item.config.shopId] = groups[item.config.shopId] || []).push(item); }); return Promise.all(Object.keys(groups).map(function (shopId) { var group = groups[shopId]; return fetch(new URL("/api/widget/config", scriptOrigin), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shop: shopId, skus: group.map(function (item) { return item.config.sku; }) }) }).then(function (response) { return response.json(); }).then(function (result) { group.forEach(function (item) { applyResult(item, result.items && result.items[item.config.sku], result.subscriptionActive !== false); }); }).catch(function () {}); })); }
+  function applyResult(instance, result, subscriptionActive) { instance.ready = false; if (!subscriptionActive) { instance.button.textContent = "AR-примерка временно недоступна"; instance.button.disabled = true; instance.button.style.display = "block"; return; } if (!result || !result.available) { instance.button.style.display = "none"; return; } instance.config = Object.assign(instance.config, result); instance.ready = true; instance.button.disabled = false; instance.button.textContent = instance.config.label + "  ↗"; instance.button.setAttribute("aria-label", instance.config.label + ": " + instance.config.name); instance.button.style.display = "block"; }
+  function resolveInstances(list) {
+    var unresolved = list.filter(function (item) { return item.config.shopId && item.config.sku; });
+    if (!unresolved.length) return Promise.resolve();
+    var groups = {};
+    unresolved.forEach(function (item) { item.ready = false; (groups[item.config.shopId] = groups[item.config.shopId] || []).push(item); });
+    return Promise.all(Object.keys(groups).map(function (shopId) {
+      var group = groups[shopId];
+      var revisions = group.map(function (item) { item.revision = (item.revision || 0) + 1; return item.revision; });
+      return fetch(new URL("/api/widget/config", scriptOrigin), { method: "POST", cache: "no-store", headers: { "content-type": "application/json" }, body: JSON.stringify({ shop: shopId, skus: group.map(function (item) { return item.config.sku; }) }) })
+        .then(function (response) { if (!response.ok) throw new Error("config_unavailable"); return response.json(); })
+        .then(function (result) { group.forEach(function (item, index) { if (item.revision === revisions[index]) applyResult(item, result.items && result.items[item.config.sku], result.subscriptionActive === true); }); })
+        .catch(function () { group.forEach(function (item, index) { if (item.revision !== revisions[index]) return; item.ready = false; item.button.textContent = "Повторить загрузку AR ↻"; item.button.disabled = false; item.button.style.display = "block"; }); });
+    }));
+  }
   function mount(input) { var instance = createInstance(input); resolveInstances([instance]); return { open: function () { openInstance(instance); }, close: closeModal, button: instance.button, update: function (next) { instance.config = Object.assign(instance.config, next || {}); resolveInstances([instance]); }, destroy: function () { instance.button.remove(); instances = instances.filter(function (item) { return item !== instance; }); } }; }
   function reportInstallation(shopId) { if (!shopId || installationReported[shopId]) return; installationReported[shopId] = true; fetch(new URL("/api/widget/install", scriptOrigin), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shopId: shopId, pageUrl: window.location.href }), keepalive: true }).catch(function () { installationReported[shopId] = false; }); }
   function scan() { var globalConfig = dataConfig(script), created = []; document.querySelectorAll("[data-mirrai-sku]").forEach(function (node) { if (node.getAttribute("data-mirrai-mounted") === "true") return; node.setAttribute("data-mirrai-mounted", "true"); created.push(createInstance(Object.assign({}, globalConfig, dataConfig(node), { target: node, shopId: node.dataset.shopId || globalConfig.shopId }))); }); resolveInstances(created); reportInstallation(globalConfig.shopId); return created.length; }

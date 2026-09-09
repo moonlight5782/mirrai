@@ -18,6 +18,7 @@ export const shops = sqliteTable("shops", {
   installationCheckedAt: text("installation_checked_at"),
   plan: text("plan").notNull().default("pilot"),
   trialEndsAt: text("trial_ends_at"),
+  subscriptionEndsAt: text("subscription_ends_at"),
   ownerUserId: text("owner_user_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_shops_slug").on(table.slug)]);
