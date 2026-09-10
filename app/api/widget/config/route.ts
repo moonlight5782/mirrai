@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { productModels, products, productVariants, shops } from "../../../../db/schema";
 import { requestDomain, widgetJson, widgetOptions } from "../cors";
+import { subscriptionAccess } from "../../../../db/subscription.mjs";
 
 export function OPTIONS(request: Request) { return widgetOptions(request); }
 
@@ -47,20 +48,23 @@ export async function GET(request: Request) {
   const allowed = JSON.parse(row.shop.allowedDomains || "[]") as string[];
   const domain = requestDomain(request);
   if (allowed.length && !allowed.includes(domain)) return widgetJson(request, { available: false, reason: "domain_not_allowed" }, { status: 403 });
-  if (!new Set(["active", "trial"]).has(row.shop.subscriptionStatus)) return widgetJson(request, { available: false, reason: "subscription_inactive" });
+  const access = subscriptionAccess(row.shop);
+  if (!access.allowed) return widgetJson(request, { available: false, subscriptionActive: false, reason: access.reason });
   const variantRows = await db.select().from(productVariants).where(and(eq(productVariants.productId, row.product.id), eq(productVariants.active, true))).orderBy(asc(productVariants.sortOrder), asc(productVariants.id));
   return widgetJson(request, widgetProduct(row.shop, row.product, row.model, publicVariants(row.product, variantRows), requestedVariantId));
 }
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({})) as { shop?: string; skus?: string[] };
-  const shopSlug = body.shop?.slice(0, 80) ?? ""; const skus = [...new Set((body.skus ?? []).map(value => String(value).slice(0, 120)).filter(Boolean))].slice(0, 100);
+  const shopSlug = typeof body?.shop === "string" ? body.shop.slice(0, 80) : "";
+  const skus = [...new Set((Array.isArray(body?.skus) ? body.skus : []).filter(value => typeof value === "string").map(value => value.slice(0, 120)).filter(Boolean))].slice(0, 100);
   if (!shopSlug || !skus.length) return widgetJson(request, { error: "missing_identifiers" }, { status: 400 });
   const db = getDb(); const [shop] = await db.select().from(shops).where(eq(shops.slug, shopSlug)).limit(1);
   if (!shop) return widgetJson(request, { error: "shop_not_found" }, { status: 404 });
   const allowed = JSON.parse(shop.allowedDomains || "[]") as string[]; const domain = requestDomain(request);
   if (allowed.length && !allowed.includes(domain)) return widgetJson(request, { error: "domain_not_allowed" }, { status: 403 });
-  if (!new Set(["active", "trial"]).has(shop.subscriptionStatus)) return widgetJson(request, { subscriptionActive: false, items: {} });
+  const access = subscriptionAccess(shop);
+  if (!access.allowed) return widgetJson(request, { subscriptionActive: false, reason: access.reason, items: {} });
   const rows = await db.select({ product: products, model: productModels }).from(products).leftJoin(productModels, eq(productModels.productId, products.id)).where(and(eq(products.shopId, shop.id), eq(products.active, true), inArray(products.sku, skus)));
   const variantMatches = await db.select({ requestedSku: productVariants.sku, product: products, model: productModels, requestedVariantId: productVariants.id }).from(productVariants).innerJoin(products, eq(productVariants.productId, products.id)).leftJoin(productModels, eq(productModels.productId, products.id)).where(and(eq(products.shopId, shop.id), eq(products.active, true), eq(productVariants.active, true), inArray(productVariants.sku, skus)));
   const productIds = [...new Set([...rows.map(row => row.product.id), ...variantMatches.map(row => row.product.id)])];
@@ -75,5 +79,5 @@ export async function POST(request: Request) {
     if (!source) return [requestedSku, { available: false, reason: "product_not_found" }];
     return [requestedSku, widgetProduct(shop, source.product, source.model, publicVariants(source.product, grouped.get(source.product.id) ?? []), variantRow ? String(variantRow.requestedVariantId) : undefined)];
   }));
-  return widgetJson(request, { subscriptionActive: true, items }, { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } });
+  return widgetJson(request, { subscriptionActive: true, expiresAt: access.expiresAt, items });
 }
