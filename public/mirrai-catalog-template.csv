@@ -1,2 +1,2 @@
-sku,name,category,price,material,width,height,depth,glb,usdz
-CLOUD-001,Кресло Cloud,Кресла,67000 ₽,Букле,84,76,82,,
+sku,name,category,price,material,width,height,depth,images,source_url,glb,usdz
+CLOUD-001,Кресло Cloud,Кресла,67000 ₽,Букле,84,76,82,https://store.example/cloud-front.jpg|https://store.example/cloud-side.jpg,https://store.example/products/cloud,,

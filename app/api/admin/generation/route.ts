@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getChatGPTUser } from "../../../chatgpt-auth";
 import { getDb } from "../../../../db";
-import { authorizedShop } from "../../../../db/authorization";
+import { authorizedShop, isPlatformOperator } from "../../../../db/authorization";
 import { getUploadsBucket } from "../../../../db/storage";
 import { assets, generationJobs, productModels, products } from "../../../../db/schema";
 
@@ -12,7 +12,7 @@ type HfOperation = "generation_all" | "shape_generation" | "run_button";
 type GenerationState = { status?: string; model_url?: string; error?: string; textured?: boolean };
 type HfJob = { operation: HfOperation; eventId: string; sessionHash?: string };
 type HfQueueMessage = { msg?: string; event_id?: string | null; success?: boolean; output?: { data?: unknown[]; error?: string } };
-const activeStatuses = ["queued", "submitting", "processing", "blocked"];
+const activeStatuses = ["requested", "queued", "submitting", "processing", "blocked"];
 
 function serviceConfig(): ServiceConfig | null {
   const runtime = env as unknown as Runtime;
@@ -43,36 +43,42 @@ export async function GET(request: Request) {
   const access = await authorizedShop(user, new URL(request.url).searchParams.get("shop"));
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
   const rows = await getDb().select({ job: generationJobs, sku: products.sku, name: products.name }).from(generationJobs).innerJoin(products, eq(generationJobs.productId, products.id)).where(eq(generationJobs.shopId, access.shop.id)).orderBy(desc(generationJobs.priority), desc(generationJobs.createdAt));
-  return Response.json({ serviceConfigured: Boolean(serviceConfig()), items: rows });
+  return Response.json({ serviceConfigured: Boolean(serviceConfig()), operator: await isPlatformOperator(user), items: rows });
 }
 
 export async function POST(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
-  const body = await request.json().catch(() => ({})) as { shop?: string; productIds?: number[]; action?: "enqueue" | "run" };
+  const body = await request.json().catch(() => ({})) as { shop?: string; productIds?: number[]; action?: "request" | "enqueue" | "run" };
   const access = await authorizedShop(user, body.shop);
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
-  if (body.action === "run") return runJobs(access.shop, new URL(request.url).origin);
+  const operator = await isPlatformOperator(user);
+  if (body.action === "run") return operator ? runJobs(access.shop, new URL(request.url).origin) : Response.json({ error: "operator_required" }, { status: 403 });
+  if (body.action !== "request" && !operator) return Response.json({ error: "operator_required" }, { status: 403 });
 
   const ids = [...new Set((body.productIds ?? []).map(Number).filter(Number.isInteger))].slice(0, 100);
   if (!ids.length) return Response.json({ error: "products_required" }, { status: 400 });
   const db = getDb();
   const selected = await db.select().from(products).where(and(eq(products.shopId, access.shop.id), inArray(products.id, ids)));
-  const existing = await db.select({ productId: generationJobs.productId }).from(generationJobs).where(and(eq(generationJobs.shopId, access.shop.id), inArray(generationJobs.status, activeStatuses), inArray(generationJobs.productId, ids)));
-  const busy = new Set(existing.map(item => item.productId));
+  const existing = await db.select({ id: generationJobs.id, productId: generationJobs.productId, status: generationJobs.status }).from(generationJobs).where(and(eq(generationJobs.shopId, access.shop.id), inArray(generationJobs.status, activeStatuses), inArray(generationJobs.productId, ids)));
+  const busy = new Map(existing.map(item => [item.productId, item]));
   const configured = Boolean(serviceConfig());
   let created = 0; let skipped = 0; let blockedCount = 0;
   for (const product of selected) {
     const images = imageList(product.imageUrls);
-    if (!images.length || busy.has(product.id)) { skipped += 1; continue; }
+    const active = busy.get(product.id);
+    if (!images.length || (active && !(body.action === "enqueue" && active.status === "requested"))) { skipped += 1; continue; }
     const hasCachedSource = images.some(image => image.startsWith("/") || sameHost(image, new URL(request.url).origin));
     const blockedBySource = access.shop.catalogSyncStatus === "blocked" && !hasCachedSource;
-    const blocked = !configured || blockedBySource;
+    const requested = body.action === "request";
+    const blocked = !requested && (!configured || blockedBySource);
     if (blocked) blockedCount += 1;
-    const errorCode = !configured ? "service_not_configured" : blockedBySource ? "source_unavailable" : null;
-    const message = !configured ? "Подключите Hugging Face ZeroGPU или собственный 3D-сервер" : blockedBySource ? "Сохраните фотографию в MIRRAI: источник магазина недоступен по HTTPS" : null;
-    await db.insert(generationJobs).values({ id: crypto.randomUUID(), shopId: access.shop.id, productId: product.id, status: blocked ? "blocked" : "queued", priority: Math.max(1, 100 - ids.indexOf(product.id)), sourceImages: JSON.stringify(images), errorCode, errorMessage: message });
-    await db.insert(productModels).values({ productId: product.id, status: blocked ? "missing" : "queued", sourceType: "website_photo", validationMessage: message ?? "Фотографии приняты в очередь генерации", updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: productModels.productId, set: { status: blocked ? "missing" : "queued", sourceType: "website_photo", validationMessage: message ?? "Фотографии приняты в очередь генерации", updatedAt: new Date().toISOString() } });
+    const errorCode = requested ? "awaiting_operator" : !configured ? "service_not_configured" : blockedBySource ? "source_unavailable" : null;
+    const message = requested ? "Заявка отправлена MIRRAI — проверим фотографии и стоимость" : !configured ? "Подключите Hugging Face ZeroGPU или собственный 3D-сервер" : blockedBySource ? "Сохраните фотографию в MIRRAI: источник магазина недоступен по HTTPS" : null;
+    const nextStatus = requested ? "requested" : blocked ? "blocked" : "queued";
+    if (active?.status === "requested") await db.update(generationJobs).set({ status: nextStatus, sourceImages: JSON.stringify(images), errorCode, errorMessage, updatedAt: new Date().toISOString() }).where(eq(generationJobs.id, active.id));
+    else await db.insert(generationJobs).values({ id: crypto.randomUUID(), shopId: access.shop.id, productId: product.id, status: nextStatus, priority: Math.max(1, 100 - ids.indexOf(product.id)), sourceImages: JSON.stringify(images), errorCode, errorMessage: message });
+    await db.insert(productModels).values({ productId: product.id, status: requested || blocked ? "missing" : "queued", sourceType: "website_photo", validationMessage: message ?? "Фотографии приняты в очередь генерации", updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: productModels.productId, set: { status: requested || blocked ? "missing" : "queued", sourceType: "website_photo", validationMessage: message ?? "Фотографии приняты в очередь генерации", updatedAt: new Date().toISOString() } });
     created += 1;
   }
   return Response.json({ ok: true, created, skipped, blocked: blockedCount > 0, serviceConfigured: configured });
