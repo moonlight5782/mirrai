@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { products, productVariants, shops, widgetEvents } from "../../../../db/schema";
 import { subscriptionAccess } from "../../../../db/subscription.mjs";
-import { requestDomain, widgetJson, widgetOptions } from "../cors";
+import { widgetDomainAllowed, widgetJson, widgetOptions } from "../cors";
 
 const allowedEvents = new Set(["widget_open", "model_ready", "ar_open", "object_placed"]);
 export function OPTIONS(request: Request) { return widgetOptions(request); }
@@ -19,8 +19,7 @@ export async function POST(request: Request) {
   if (!row) return widgetJson(request, { error: "product_not_found" }, { status: 404 });
   if (!subscriptionAccess(row.shop).allowed) return widgetJson(request, { error: "subscription_inactive" }, { status: 403 });
   const allowed = JSON.parse(row.allowedDomains || "[]") as string[];
-  const domain = requestDomain(request);
-  if (allowed.length && !allowed.includes(domain)) return widgetJson(request, { error: "domain_not_allowed" }, { status: 403 });
+  if (!widgetDomainAllowed(request, allowed)) return widgetJson(request, { error: "domain_not_allowed" }, { status: 403 });
   await db.insert(widgetEvents).values({ shopId: row.shopId, productId: row.productId, event: body.event });
   return widgetJson(request, { ok: true }, { status: 202 });
 }

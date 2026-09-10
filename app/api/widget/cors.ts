@@ -16,3 +16,10 @@ export function requestDomain(request: Request) {
   if (!value) return "";
   try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
+
+export function widgetDomainAllowed(request: Request, allowedDomains: string[], fallbackDomain = "") {
+  const domain = requestDomain(request) || fallbackDomain;
+  let apiDomain = "";
+  try { apiDomain = new URL(request.url).hostname.toLowerCase().replace(/^www\./, ""); } catch { apiDomain = ""; }
+  return !allowedDomains.length || domain === apiDomain || allowedDomains.includes(domain);
+}

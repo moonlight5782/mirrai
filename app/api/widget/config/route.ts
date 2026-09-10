@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { productModels, products, productVariants, shops } from "../../../../db/schema";
-import { requestDomain, widgetJson, widgetOptions } from "../cors";
+import { widgetDomainAllowed, widgetJson, widgetOptions } from "../cors";
 import { subscriptionAccess } from "../../../../db/subscription.mjs";
 
 export function OPTIONS(request: Request) { return widgetOptions(request); }
@@ -46,8 +46,7 @@ export async function GET(request: Request) {
   }
   if (!row) return widgetJson(request, { available: false, reason: "product_not_found" }, { status: 404 });
   const allowed = JSON.parse(row.shop.allowedDomains || "[]") as string[];
-  const domain = requestDomain(request);
-  if (allowed.length && !allowed.includes(domain)) return widgetJson(request, { available: false, reason: "domain_not_allowed" }, { status: 403 });
+  if (!widgetDomainAllowed(request, allowed)) return widgetJson(request, { available: false, reason: "domain_not_allowed" }, { status: 403 });
   const access = subscriptionAccess(row.shop);
   if (!access.allowed) return widgetJson(request, { available: false, subscriptionActive: false, reason: access.reason });
   const variantRows = await db.select().from(productVariants).where(and(eq(productVariants.productId, row.product.id), eq(productVariants.active, true))).orderBy(asc(productVariants.sortOrder), asc(productVariants.id));
@@ -61,8 +60,8 @@ export async function POST(request: Request) {
   if (!shopSlug || !skus.length) return widgetJson(request, { error: "missing_identifiers" }, { status: 400 });
   const db = getDb(); const [shop] = await db.select().from(shops).where(eq(shops.slug, shopSlug)).limit(1);
   if (!shop) return widgetJson(request, { error: "shop_not_found" }, { status: 404 });
-  const allowed = JSON.parse(shop.allowedDomains || "[]") as string[]; const domain = requestDomain(request);
-  if (allowed.length && !allowed.includes(domain)) return widgetJson(request, { error: "domain_not_allowed" }, { status: 403 });
+  const allowed = JSON.parse(shop.allowedDomains || "[]") as string[];
+  if (!widgetDomainAllowed(request, allowed)) return widgetJson(request, { error: "domain_not_allowed" }, { status: 403 });
   const access = subscriptionAccess(shop);
   if (!access.allowed) return widgetJson(request, { subscriptionActive: false, reason: access.reason, items: {} });
   const rows = await db.select({ product: products, model: productModels }).from(products).leftJoin(productModels, eq(productModels.productId, products.id)).where(and(eq(products.shopId, shop.id), eq(products.active, true), inArray(products.sku, skus)));
