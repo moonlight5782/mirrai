@@ -62,7 +62,8 @@ function identifier(sourceUrl: string) {
   return `WEB-${(hash >>> 0).toString(36).toUpperCase()}`;
 }
 
-export function parseFurnitureSitemap(xml: string): SitemapProduct[] {
+export function parseFurnitureSitemap(xml: string, skuPrefix = ""):
+  SitemapProduct[] {
   const result = new Map<string, SitemapProduct>();
   for (const match of xml.matchAll(/<url(?:\s[^>]*)?>([\s\S]*?)<\/url>/gi)) {
     const block = match[1];
@@ -72,7 +73,7 @@ export function parseFurnitureSitemap(xml: string): SitemapProduct[] {
     const name = tag(imageBlocks[0] ?? "", "image:title") || tag(imageBlocks[0] ?? "", "image:caption");
     if (!sourceUrl || !name || imageUrls.length === 0 || !furnitureTerms.test(name.toLowerCase())) continue;
     const externalId = identifier(sourceUrl);
-    result.set(externalId, { externalId, sku: `HUGGE-${externalId}`, name: name.slice(0, 160), category: categoryFor(name), sourceUrl, imageUrls: [...new Set(imageUrls)].slice(0, 12), sourceUpdatedAt: tag(block, "lastmod") || null, ...dimensions(name) });
+    result.set(externalId, { externalId, sku: `${skuPrefix}${externalId}`, name: name.slice(0, 160), category: categoryFor(name), sourceUrl, imageUrls: [...new Set(imageUrls)].slice(0, 12), sourceUpdatedAt: tag(block, "lastmod") || null, ...dimensions(name) });
   }
   return [...result.values()];
 }

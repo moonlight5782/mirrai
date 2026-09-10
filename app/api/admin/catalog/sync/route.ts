@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
   const xml = await response.text();
   if (xml.length > 8_000_000) return Response.json({ error: "source_too_large" }, { status: 413 });
-  const catalog = parseFurnitureSitemap(xml);
+  const catalog = parseFurnitureSitemap(xml, access.shop.slug === "hugge-md" ? "HUGGE-" : "");
   const offset = Math.max(0, Math.floor(Number(body.offset) || 0));
   const page = catalog.slice(offset, offset + 100);
   const now = new Date().toISOString();

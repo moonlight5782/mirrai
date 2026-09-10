@@ -251,7 +251,7 @@ test("batch 3D generation requires texture and never publishes unreviewed models
   assert.match(albaTextureOnly, /crossed_sled_base/); assert.match(albaTextureOnly, /damaged_frame_mask/); assert.doesNotMatch(albaTextureOnly, /clean_steel_frame/);
   const albaMultiview = await readFile(new URL("../scripts/materialize_alba.py", import.meta.url), "utf8");
   assert.match(albaMultiview, /TARGET_EXTENTS/); assert.match(albaMultiview, /Alba grey velvet/); assert.match(albaMultiview, /Alba matte black metal/);
-  assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Добавить выбранные/);
+  assert.match(route, /status: "review"/); assert.doesNotMatch(route, /status: "published"/); assert.match(catalog, /ПАКЕТНАЯ ГЕНЕРАЦИЯ 3D/); assert.match(catalog, /Одобрить и поставить в очередь/);
 });
 
 test("demo widget preserves known product width when depth is missing", async () => {

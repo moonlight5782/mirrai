@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { getChatGPTUser } from "../../../chatgpt-auth";
 import { getDb } from "../../../../db";
 import { productModels, products } from "../../../../db/schema";
-import { authorizedShop } from "../../../../db/authorization";
+import { authorizedShop, isPlatformOperator } from "../../../../db/authorization";
 
 const statuses = new Set(["missing", "queued", "processing", "review", "ready", "published", "failed"]);
 
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
   const safeUrl = (value?: string) => !value || value.startsWith("/") || /^https:\/\//i.test(value);
   if (!safeUrl(body.glbUrl) || !safeUrl(body.usdzUrl)) return Response.json({ error: "https_assets_required" }, { status: 400 });
   if (status === "published" && !body.glbUrl) return Response.json({ error: "glb_required_for_publish" }, { status: 400 });
+  if (["ready", "published"].includes(status) && !await isPlatformOperator(user)) return Response.json({ error: "operator_required" }, { status: 403 });
   const db = getDb();
   const [product] = await db.select({ id: products.id }).from(products).where(and(eq(products.id, productId), eq(products.shopId, shop.id))).limit(1);
   if (!product) return Response.json({ error: "product_not_found" }, { status: 404 });
