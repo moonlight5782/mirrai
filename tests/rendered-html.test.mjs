@@ -66,6 +66,8 @@ test("HUGGE demo builds a multi-product room composition for AR", async () => {
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(store, /Добавить в комнату/);
+  assert.match(store, /Открыть комнату/);
+  assert.match(store, /room-floating/);
   assert.match(store, /mirrai-room-hugge-md/);
   assert.match(room, /GLTFExporter/);
   assert.match(room, /safeShopSlug/);
