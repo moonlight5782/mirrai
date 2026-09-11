@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
 export type ARSceneItem = { key: string; name: string; model: string; width: number; height: number; depth: number; x: number; z: number; rotation: number };
 
@@ -46,9 +47,11 @@ export function MultiObjectAR({ items, onFallback, onStatus }: Props) {
       scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 2.2));
       const directional = new THREE.DirectionalLight(0xffffff, 1.4); directional.position.set(2, 5, 3); scene.add(directional);
       const composition = new THREE.Group(); composition.visible = false; scene.add(composition); compositionRef.current = composition;
-      const loader = new GLTFLoader(); objectsRef.current.clear();
+      const loader = new GLTFLoader(); const draco = new DRACOLoader(); draco.setDecoderPath("/draco/"); loader.setDRACOLoader(draco); objectsRef.current.clear();
       for (const item of items) {
-        const gltf = await loader.loadAsync(new URL(item.model, location.origin).toString());
+        let gltf;
+        try { gltf = await loader.loadAsync(new URL(item.model, location.origin).toString()); }
+        catch { continue; }
         const object = gltf.scene.clone(true);
         const sourceSize = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
         object.scale.set(item.width / Math.max(sourceSize.x, .001), item.height / Math.max(sourceSize.y, .001), item.depth / Math.max(sourceSize.z, .001));
@@ -58,6 +61,8 @@ export function MultiObjectAR({ items, onFallback, onStatus }: Props) {
         object.traverse(node => { node.userData.roomKey = item.key; });
         composition.add(object); objectsRef.current.set(item.key, object);
       }
+      draco.dispose();
+      if (!composition.children.length) throw new Error("no_models_loaded");
       const reticle = new THREE.Mesh(new THREE.RingGeometry(.09, .12, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xb8ff31 }));
       reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
       await renderer.xr.setSession(session);

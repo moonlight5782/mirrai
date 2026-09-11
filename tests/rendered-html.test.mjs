@@ -70,9 +70,12 @@ test("HUGGE demo builds a multi-product room composition for AR", async () => {
   assert.match(store, /room-floating/);
   assert.match(store, /mirrai-room-hugge-md/);
   assert.match(room, /GLTFExporter/);
+  assert.match(room, /DRACOLoader/);
+  assert.match(room, /setDecoderPath\("\/draco\/"\)/);
   assert.match(room, /safeShopSlug/);
   assert.match(room, /ar-scale": "fixed"/);
   assert.match(multiAr, /immersive-ar/);
+  assert.match(multiAr, /DRACOLoader/);
   assert.match(multiAr, /requestHitTestSource/);
   assert.match(multiAr, /Двигайте выбранный предмет по полу/);
   assert.match(css, /room-workspace/);

@@ -57,13 +57,17 @@ export default function RoomPage() {
     const timer = window.setTimeout(async () => {
       setStatus("Собираем композицию…");
       try {
-        const [THREE, loaderModule, exporterModule] = await Promise.all([import("three"), import("three/examples/jsm/loaders/GLTFLoader.js"), import("three/examples/jsm/exporters/GLTFExporter.js")]);
+        const [THREE, loaderModule, exporterModule, dracoModule] = await Promise.all([import("three"), import("three/examples/jsm/loaders/GLTFLoader.js"), import("three/examples/jsm/exporters/GLTFExporter.js"), import("three/examples/jsm/loaders/DRACOLoader.js")]);
         const loader = new loaderModule.GLTFLoader();
+        const draco = new dracoModule.DRACOLoader(); draco.setDecoderPath("/draco/"); loader.setDRACOLoader(draco);
         const group = new THREE.Group();
+        const skipped: string[] = [];
         for (const placed of items) {
           const resolved = resolveProduct(data, placed);
           if (!resolved.model || !resolved.product) continue;
-          const gltf = await loader.loadAsync(new URL(resolved.model, window.location.origin).toString());
+          let gltf;
+          try { gltf = await loader.loadAsync(new URL(resolved.model, window.location.origin).toString()); }
+          catch { skipped.push(resolved.name); continue; }
           const object = gltf.scene.clone(true);
           const sourceBox = new THREE.Box3().setFromObject(object);
           const sourceSize = sourceBox.getSize(new THREE.Vector3());
@@ -78,12 +82,15 @@ export default function RoomPage() {
           object.name = resolved.name;
           group.add(object);
         }
+        draco.dispose();
+        if (!group.children.length) throw new Error("no_models_loaded");
         const exporter = new exporterModule.GLTFExporter();
         const buffer = await exporter.parseAsync(group, { binary: true, onlyVisible: true, maxTextureSize: 2048 });
         if (cancelled || !(buffer instanceof ArrayBuffer)) return;
         const nextUrl = URL.createObjectURL(new Blob([buffer], { type: "model/gltf-binary" }));
         setCompositeUrl(previous => { if (previous.startsWith("blob:")) URL.revokeObjectURL(previous); return nextUrl; });
-        setStatus(`${items.length} ${items.length === 1 ? "предмет" : items.length < 5 ? "предмета" : "предметов"} готовы к размещению`);
+        const readyCount = group.children.length;
+        setStatus(skipped.length ? `${readyCount} готовы · ${skipped.length} пропущено` : `${readyCount} ${readyCount === 1 ? "предмет" : readyCount < 5 ? "предмета" : "предметов"} готовы к размещению`);
       } catch { if (!cancelled) setStatus("Не удалось собрать сцену. Удалите проблемный товар и повторите."); }
     }, 180);
     return () => { cancelled = true; window.clearTimeout(timer); };
