@@ -58,6 +58,24 @@ test("HUGGE demo reads real products and model states from the shared catalogue"
   assert.match(route, /published/);
 });
 
+test("HUGGE demo builds a multi-product room composition for AR", async () => {
+  const [store, room, multiAr, css] = await Promise.all([
+    readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/room/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/room/multi-object-ar.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(store, /Добавить в комнату/);
+  assert.match(store, /mirrai-room-hugge-md/);
+  assert.match(room, /GLTFExporter/);
+  assert.match(room, /safeShopSlug/);
+  assert.match(room, /ar-scale": "fixed"/);
+  assert.match(multiAr, /immersive-ar/);
+  assert.match(multiAr, /requestHitTestSource/);
+  assert.match(multiAr, /Двигайте выбранный предмет по полу/);
+  assert.match(css, /room-workspace/);
+});
+
 test("HUGGE product cards provide a navigable full-screen photo gallery", async () => {
   const store = await readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8");
   assert.match(store, /galleryImages/);
