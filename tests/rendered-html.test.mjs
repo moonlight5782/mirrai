@@ -45,17 +45,23 @@ test("renders a real store-card integration demo", async () => {
 });
 
 test("HUGGE demo reads real products and model states from the shared catalogue", async () => {
-  const [store, route] = await Promise.all([
+  const [store, route, qaMigration] = await Promise.all([
     readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/storefront/catalog/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0028_hugge_visual_qa.sql", import.meta.url), "utf8"),
   ]);
   assert.match(store, /api\/storefront\/catalog\?shop=hugge-md/);
   assert.match(store, /catalog\.items\.find\(item => item\.demoAvailable\)/);
-  assert.match(store, /AR появится после создания 3D-модели/);
+  assert.match(store, /AR появится после повторной проверки 3D-модели/);
   assert.match(store, /selected\.model/);
   assert.match(route, /leftJoin\(productModels/);
   assert.match(route, /demoAvailable/);
+  assert.doesNotMatch(route, /\["review", "ready", "published"\]/);
+  assert.match(route, /modelStatus === "published"/);
   assert.match(route, /published/);
+  assert.match(qaMigration, /HUGGE-85345' THEN 'Стол письменный Actona Neptun, белый цвет'/);
+  assert.match(qaMigration, /HUGGE-100326','HUGGE-107376','HUGGE-35348/);
+  assert.match(qaMigration, /статус`='review'|`status`='review'/);
 });
 
 test("HUGGE pitch demo keeps room composition out of the customer journey", async () => {
@@ -67,7 +73,7 @@ test("HUGGE pitch demo keeps room composition out of the customer journey", asyn
   ]);
   assert.doesNotMatch(store, /Открыть комнату/);
   assert.doesNotMatch(store, /mirrai-room-hugge-md/);
-  assert.match(store, /Текстуры и масштаб проверены/);
+  assert.match(store, /Геометрия, текстуры и масштаб проверены/);
   assert.match(room, /GLTFExporter/);
   assert.match(room, /DRACOLoader/);
   assert.match(room, /setDecoderPath\("\/draco\/"\)/);
