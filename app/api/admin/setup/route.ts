@@ -36,6 +36,15 @@ export async function POST(request: Request) {
   const shop = access.shop;
   const normalized = normalizeDomain(body.websiteUrl ?? "");
   if (!normalized || !platforms.has(body.platform ?? "")) return Response.json({ error: "invalid_setup" }, { status: 400 });
-  await getDb().update(shops).set({ websiteUrl: normalized.websiteUrl, allowedDomains: JSON.stringify([normalized.domain]), platform: body.platform!, installationStatus: shop.websiteUrl === normalized.websiteUrl ? shop.installationStatus : "waiting" }).where(eq(shops.id, shop.id));
+  const db = getDb();
+  const allShops = await db.select({ id: shops.id, allowedDomains: shops.allowedDomains, websiteUrl: shops.websiteUrl }).from(shops);
+  const domainTaken = allShops.some(item => {
+    if (item.id === shop.id) return false;
+    let allowed: string[] = [];
+    try { allowed = JSON.parse(item.allowedDomains || "[]"); } catch { allowed = []; }
+    return normalizeDomain(item.websiteUrl ?? "")?.domain === normalized.domain || allowed.some(value => value.toLowerCase().replace(/^www\./, "") === normalized.domain);
+  });
+  if (domainTaken) return Response.json({ error: "domain_exists" }, { status: 409 });
+  await db.update(shops).set({ websiteUrl: normalized.websiteUrl, allowedDomains: JSON.stringify([normalized.domain]), platform: body.platform!, installationStatus: shop.websiteUrl === normalized.websiteUrl ? shop.installationStatus : "waiting" }).where(eq(shops.id, shop.id));
   return Response.json({ ok: true });
 }
