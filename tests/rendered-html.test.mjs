@@ -58,17 +58,16 @@ test("HUGGE demo reads real products and model states from the shared catalogue"
   assert.match(route, /published/);
 });
 
-test("HUGGE demo builds a multi-product room composition for AR", async () => {
+test("HUGGE pitch demo keeps room composition out of the customer journey", async () => {
   const [store, room, multiAr, css] = await Promise.all([
     readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/room/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/room/multi-object-ar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(store, /Добавить в комнату/);
-  assert.match(store, /Открыть комнату/);
-  assert.match(store, /room-floating/);
-  assert.match(store, /mirrai-room-hugge-md/);
+  assert.doesNotMatch(store, /Открыть комнату/);
+  assert.doesNotMatch(store, /mirrai-room-hugge-md/);
+  assert.match(store, /Текстуры и масштаб проверены/);
   assert.match(room, /GLTFExporter/);
   assert.match(room, /DRACOLoader/);
   assert.match(room, /setDecoderPath\("\/draco\/"\)/);
