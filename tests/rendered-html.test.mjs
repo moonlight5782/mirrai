@@ -130,19 +130,22 @@ test("navigation preserves shop context and furniture viewer URLs", async () => 
   assert.match(subscription, /ТАРИФ И ДОСТУП/);
 });
 
-test("nontechnical setup wizard provides auto-scan installation and domain checks", async () => {
-  const [wizard, sdk, installRoute, cors, migration] = await Promise.all([
+test("nontechnical setup wizard provides universal installation and domain checks", async () => {
+  const [wizard, sdk, bootstrapRoute, installRoute, cors, migration] = await Promise.all([
     readFile(new URL("../app/admin/setup/setup-wizard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/widget/bootstrap/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/widget/install/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/widget/cors.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0001_sad_roughhouse.sql", import.meta.url), "utf8"),
   ]);
   assert.match(wizard, /Подключение магазина/);
   assert.match(wizard, /Отправить разработчику/);
-  assert.match(wizard, /data-mirrai-sku/);
+  assert.match(wizard, /data-auto="universal"/);
   assert.match(sdk, /querySelectorAll\("\[data-mirrai-sku\]"\)/);
   assert.match(sdk, /api\/widget\/install/);
+  assert.match(bootstrapRoute, /domain_ambiguous/);
+  assert.match(bootstrapRoute, /subscriptionAccess/);
   assert.match(installRoute, /domain_not_allowed/);
   assert.match(cors, /Access-Control-Allow-Origin/);
   assert.match(migration, /installation_status/);
@@ -162,7 +165,7 @@ test("commercial pilot architecture supports tenants, imports, R2 assets and sca
   ]);
   assert.match(schema, /shopMembers/); assert.match(schema, /shopInvites/); assert.match(schema, /platformOperators/); assert.match(schema, /export const assets/);
   assert.match(auth, /acceptInvites/); assert.match(clients, /ownerEmail/); assert.match(importer, /parseCsv/); assert.match(upload, /getUploadsBucket/);
-  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "1\.2\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
+  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "2\.0\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
   assert.match(hosting, /"r2": "UPLOADS"/); assert.match(migration, /CREATE TABLE `assets`/);
 });
 
@@ -206,7 +209,7 @@ test("HUGGE pilot imports website photos and installs automatically on OpenCart"
   ]);
   assert.match(schema, /catalogSourceUrl/); assert.match(schema, /imageUrls/); assert.match(migration, /'hugge-md','HUGGE\.md'/); assert.match(migration, /HUGGE-89990/);
   assert.match(syncRoute, /validatedCatalogSource/); assert.match(syncRoute, /slice\(offset, offset \+ 100\)/); assert.match(parser, /parseFurnitureSitemap/); assert.match(parser, /source\.protocol !== "https:"/);
-  assert.match(catalog, /Обновить с сайта/); assert.match(catalog, /Фото найдено/); assert.match(setup, /data-auto="product"/); assert.match(sdk, /\.us-product-info-code/); assert.match(sdk, /data-mirrai-auto-product/);
+  assert.match(catalog, /Обновить с сайта/); assert.match(catalog, /Фото найдено/); assert.match(setup, /data-auto="universal"/); assert.match(sdk, /\.us-product-info-code/); assert.match(sdk, /data-mirrai-auto-product/); assert.match(sdk, /detectPlatform/); assert.match(sdk, /api\/widget\/bootstrap/);
 });
 
 test("batch 3D generation requires texture and never publishes unreviewed models", async () => {

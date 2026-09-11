@@ -30,6 +30,14 @@ export async function POST(request: Request) {
   const platform = body.platform ?? "other";
   if (!name || !website || !platforms.has(platform)) return Response.json({ error: "invalid_payload" }, { status: 400 });
   const db = getDb();
+  const existingShops = await db.select({ allowedDomains: shops.allowedDomains, websiteUrl: shops.websiteUrl }).from(shops);
+  const domainTaken = existingShops.some(item => {
+    let allowed: string[] = [];
+    try { allowed = JSON.parse(item.allowedDomains || "[]"); } catch { allowed = []; }
+    const websiteDomain = normalizedWebsite(item.websiteUrl ?? "")?.domain;
+    return websiteDomain === website.domain || allowed.some(value => value.toLowerCase().replace(/^www\./, "") === website.domain);
+  });
+  if (domainTaken) return Response.json({ error: "domain_exists" }, { status: 409 });
   const baseSlug = slugify(name);
   let created: typeof shops.$inferSelect | undefined;
   for (let attempt = 0; attempt < 3 && !created; attempt++) {
