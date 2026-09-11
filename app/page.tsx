@@ -6,10 +6,16 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type View = "landing" | "viewer";
 type UploadState = "idle" | "uploading" | "generating" | "ready" | "error";
+type ScaleState = "checking" | "verified" | "error";
 type Dimensions = { width: number; height: number; depth: number };
 type ProductVariant = { id: string; sku: string; name: string; colorName: string; color: string; material: string; image?: string; model?: string; iosModel?: string; default?: boolean; available: boolean };
 type Product = { id: string; name: string; category: string; material: string; price: string; color: string; model: string; iosModel?: string; textured: boolean; dimensions: Dimensions; variants?: ProductVariant[]; selectedVariantId?: string };
-type ModelViewerElement = HTMLElement & { activateAR?: () => Promise<void>; getDimensions?: () => { x: number; y: number; z: number } };
+type ModelViewerElement = HTMLElement & {
+  activateAR?: () => Promise<void>;
+  getDimensions?: () => { x: number; y: number; z: number };
+  updateFraming?: () => Promise<void>;
+  jumpCameraToGoal?: () => void;
+};
 
 const products: Product[] = [
   { id: "cloud", name: "Кресло Cloud", category: "Кресла", material: "Букле, светлый беж", price: "67 000 ₽", color: "#d2bda8", model: "/chair.glb", textured: true, dimensions: { width: 84, height: 76, depth: 82 } },
@@ -66,6 +72,7 @@ export default function Home() {
   const [uploadMessage, setUploadMessage] = useState("");
   const [photoPending, setPhotoPending] = useState(false);
   const [exposure, setExposure] = useState(1);
+  const [scaleState, setScaleState] = useState<ScaleState>("checking");
   const arRef = useRef<ModelViewerElement>(null);
 
   useEffect(() => {
@@ -119,7 +126,6 @@ export default function Home() {
   const selectedVariant = selectedVariants.find(variant => variant.id === activeVariantId && variant.available) ?? selectedVariants.find(variant => variant.id === selected.selectedVariantId && variant.available) ?? selectedVariants.find(variant => variant.default && variant.available) ?? selectedVariants.find(variant => variant.available);
   const selectedDimensions = customName ? customDimensions : selected.dimensions;
   const modelSource = customModel || selectedVariant?.model || selected.model;
-  const iosModelSource = customModel ? undefined : selectedVariant?.iosModel || selected.iosModel;
   const selectedColor = selectedVariant?.color || selected.color;
   const selectedMaterial = selectedVariant?.material || selected.material;
 
@@ -158,8 +164,31 @@ export default function Home() {
   useEffect(() => {
     if (view !== "viewer" || !arRef.current) return;
     const viewer = arRef.current;
-    const onLoad = () => { const source = viewer.getDimensions?.(); if (source?.x && source.y && source.z) { const clamp = (value: number) => Math.max(.01, Math.min(100, value)); const scale = [clamp((selectedDimensions.width / 100) / source.x), clamp((selectedDimensions.height / 100) / source.y), clamp((selectedDimensions.depth / 100) / source.z)]; viewer.setAttribute("scale", scale.map(value => value.toFixed(5)).join(" ")); } setArStatus(`${customName || selected.name} · ${selectedVariant?.colorName ?? "основной цвет"} — масштаб ${selectedDimensions.width} × ${selectedDimensions.depth} × ${selectedDimensions.height} см`); if (isWidget && window.parent !== window) window.parent.postMessage({ source: "mirrai-widget", event: "model_ready", productId: selected.id, variantId: selectedVariant?.id ?? null, variantSku: selectedVariant?.sku ?? null, at: new Date().toISOString() }, targetOrigin); };
-    const onError = () => setArStatus("Модель не загрузилась. Проверьте GLB/USDZ товара.");
+    let cancelled = false;
+    setScaleState("checking");
+    setArStatus("Проверяем размеры модели перед запуском AR…");
+    const onLoad = async () => {
+      const source = viewer.getDimensions?.();
+      const target = { x: selectedDimensions.width / 100, y: selectedDimensions.height / 100, z: selectedDimensions.depth / 100 };
+      if (!source || ![source.x, source.y, source.z, target.x, target.y, target.z].every(value => Number.isFinite(value) && value > 0)) {
+        if (!cancelled) { setScaleState("error"); setArStatus("Не удалось проверить физические размеры модели. AR заблокирован."); }
+        return;
+      }
+      const clamp = (value: number) => Math.max(.01, Math.min(100, value));
+      const scale = [clamp(target.x / source.x), clamp(target.y / source.y), clamp(target.z / source.z)];
+      viewer.setAttribute("scale", scale.map(value => value.toFixed(7)).join(" "));
+      await viewer.updateFraming?.();
+      viewer.jumpCameraToGoal?.();
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const measured = viewer.getDimensions?.();
+      const withinTolerance = measured && (["x", "y", "z"] as const).every(axis => Math.abs(measured[axis] - target[axis]) <= Math.max(.005, target[axis] * .005));
+      if (cancelled) return;
+      if (!withinTolerance) { setScaleState("error"); setArStatus("Размер модели не прошёл проверку 1:1. AR заблокирован."); return; }
+      setScaleState("verified");
+      setArStatus(`${customName || selected.name} · ${selectedVariant?.colorName ?? "основной цвет"} — проверено 1:1: ${selectedDimensions.width} × ${selectedDimensions.depth} × ${selectedDimensions.height} см`);
+      if (isWidget && window.parent !== window) window.parent.postMessage({ source: "mirrai-widget", event: "model_ready", productId: selected.id, variantId: selectedVariant?.id ?? null, variantSku: selectedVariant?.sku ?? null, dimensionsCm: selectedDimensions, scaleVerified: true, at: new Date().toISOString() }, targetOrigin);
+    };
+    const onError = () => { setScaleState("error"); setArStatus("Модель не загрузилась. Проверьте GLB товара."); };
     const onArStatus = (event: Event) => {
       const status = (event as CustomEvent<{ status: string }>).detail?.status;
       if (status === "object-placed") { setArStatus("Предмет размещён в вашем пространстве"); if (isWidget && window.parent !== window) window.parent.postMessage({ source: "mirrai-widget", event: "object_placed", productId: selected.id, at: new Date().toISOString() }, targetOrigin); }
@@ -167,11 +196,12 @@ export default function Home() {
       else setArStatus("Медленно направляйте камеру на свободный участок пола…");
     };
     viewer.addEventListener("load", onLoad); viewer.addEventListener("error", onError); viewer.addEventListener("ar-status", onArStatus);
-    return () => { viewer.removeEventListener("load", onLoad); viewer.removeEventListener("error", onError); viewer.removeEventListener("ar-status", onArStatus); };
+    return () => { cancelled = true; viewer.removeEventListener("load", onLoad); viewer.removeEventListener("error", onError); viewer.removeEventListener("ar-status", onArStatus); };
   }, [view, modelSource, selected.id, selected.name, selectedVariant?.id, selectedVariant?.colorName, selectedVariant?.sku, selectedDimensions.width, selectedDimensions.height, selectedDimensions.depth, customName, isWidget, targetOrigin]);
 
   async function openAR() {
     if (photoPending) { setArStatus("Сначала дождитесь готовой 3D-модели"); return; }
+    if (scaleState !== "verified") { setArStatus(scaleState === "error" ? "AR заблокирован: модель не прошла проверку размеров." : "Дождитесь проверки масштаба 1:1."); return; }
     emitWidgetEvent("ar_open"); setArStatus("Запускаем камеру и поиск поверхности…");
     try { await arRef.current?.activateAR?.(); } catch { setArStatus("AR недоступен в этом браузере. Используйте Safari на iPhone или Chrome на Android."); }
   }
@@ -210,14 +240,14 @@ export default function Home() {
   if (view === "viewer") return <main className={isWidget ? "widget-shell" : ""}>
     {!isWidget && <nav className="nav shell"><a className="brand" href="/">MIRR<span>AI</span></a><div className="nav-links"><a href="/#catalog">Каталог</a><a href="/#business">Для магазинов</a></div><button className="nav-cta" onClick={closeViewer}>На главную <span>↗</span></button></nav>}
     <section className={`viewer ${isWidget ? "viewer-widget" : "shell"}`}>
-      <header className="viewer-head"><div>{!isWidget && <button className="back" onClick={closeViewer}>← Назад</button>}<p>AR-просмотр · реальный масштаб</p><h1>{selected.name}</h1></div><div className="ready-pill"><i/> ГОТОВО К РАЗМЕЩЕНИЮ</div></header>
+      <header className="viewer-head"><div>{!isWidget && <button className="back" onClick={closeViewer}>← Назад</button>}<p>AR-просмотр · реальный масштаб</p><h1>{selected.name}</h1></div><div className={`ready-pill ${scaleState}`}><i/> {scaleState === "verified" ? "МАСШТАБ 1:1 ПРОВЕРЕН" : scaleState === "error" ? "AR НЕДОСТУПЕН" : "ПРОВЕРЯЕМ МАСШТАБ"}</div></header>
       <div className="viewer-grid">
         {!isWidget && <aside className="catalog-panel"><div className="panel-title"><span>Каталог</span><small>{catalog.length} модели</small></div>{catalog.map((item, index) => <button key={item.id} className={`product ${active === index && !customName ? "active" : ""}`} onClick={() => selectProduct(index)}><i style={{ background: item.color }}><b>▰</b></i><span><small>{item.category}</small><strong>{item.name}</strong><em>{item.price}</em></span><b className="select-mark">{active === index && !customName ? "✓" : "+"}</b></button>)}</aside>}
         <div className="ar-stage">
-          {React.createElement("model-viewer", { key: modelSource, ref: arRef, src: modelSource, "ios-src": iosModelSource, alt: `3D-модель ${customName || selected.name}${selectedVariant ? `, цвет ${selectedVariant.colorName}` : ""}`, ar: true, "ar-modes": "webxr scene-viewer quick-look", "ar-placement": "floor", "ar-scale": "fixed", "camera-controls": true, "disable-zoom": true, "touch-action": "pan-y", "shadow-intensity": ".92", "shadow-softness": ".88", exposure, "environment-image": "neutral", "tone-mapping": "neutral", "xr-environment": true, "camera-orbit": "35deg 68deg auto", "field-of-view": "30deg" }, React.createElement("button", { slot: "ar-button", className: "native-ar-button" }, "Посмотреть у себя", React.createElement("span", null, "↗")))}
+          {React.createElement("model-viewer", { key: modelSource, ref: arRef, src: modelSource, alt: `3D-модель ${customName || selected.name}${selectedVariant ? `, цвет ${selectedVariant.colorName}` : ""}`, ar: true, "ar-modes": "webxr scene-viewer quick-look", "ar-placement": "floor", "ar-scale": "fixed", "ar-usdz-max-texture-size": "2048", "camera-controls": true, "disable-zoom": true, "touch-action": "pan-y", "shadow-intensity": ".92", "shadow-softness": ".88", exposure, "environment-image": "neutral", "tone-mapping": "neutral", "xr-environment": true, "camera-orbit": "35deg 68deg auto", "field-of-view": "45deg" }, React.createElement("button", { slot: "ar-button", className: "native-ar-button", disabled: scaleState !== "verified", "aria-disabled": scaleState !== "verified" }, scaleState === "verified" ? "Посмотреть у себя" : "Проверяем 1:1", React.createElement("span", null, "↗")))}
           <div className="room-preview"><i className="preview-window"/><i className="preview-floor"/><span>Вращайте модель пальцем</span></div>
           {photoPending && <div className="reconstruction-screen">{customPreview && <img src={customPreview} alt="Исходная фотография предмета"/>}<p>Создаём AR-модель</p><div className="generation-steps"><span className="done">Фото</span><span className={uploadState === "generating" ? "active" : ""}>Геометрия</span><span>PBR</span><span>GLB</span></div><small>{uploadMessage}</small></div>}
-          <div className="viewer-badges"><span>{customModel ? "MODEL MATERIALS" : selected.textured ? "PBR MATERIALS" : "GEOMETRY PREVIEW"}</span><span>AR SCALE 1:1</span><span>ADAPTIVE LIGHT</span></div>
+          <div className="viewer-badges"><span>{customModel ? "MODEL MATERIALS" : selected.textured ? "PBR MATERIALS" : "GEOMETRY PREVIEW"}</span><span>{scaleState === "verified" ? "AR SCALE 1:1 ✓" : "AR SCALE CHECK"}</span><span>ADAPTIVE LIGHT</span></div>
         </div>
         <aside className="details-panel">
           <div><p className="control-label">Товар</p><h2>{customName || selected.name}</h2><p className="price">{customName ? "Пользовательская модель" : selected.price}</p><div className="material-row"><i style={{ background: selectedColor }}/><span>{selectedMaterial}</span></div></div>
@@ -225,7 +255,7 @@ export default function Home() {
           <div><p className="control-label">Габариты · Ш × Г × В</p><strong className="dimensions">{dimensionsLabel(selectedDimensions)}</strong><p className="hint">Модель зафиксирована в указанном масштабе. Покупатель не может случайно изменить размер в AR.</p></div>
           <div><p className="control-label">Освещение превью</p><div className="range-row"><input aria-label="Экспозиция 3D-превью" type="range" min="0.65" max="1.35" step="0.05" value={exposure} onChange={event => setExposure(Number(event.target.value))}/><span>{Math.round(exposure * 100)}%</span></div><p className="hint">В системном AR свет и цвет адаптируются камерой устройства автоматически.</p></div>
           {!isWidget && <div className="asset-upload"><p className="control-label">Тест своего товара</p><div className="dimension-inputs">{(["width", "depth", "height"] as const).map((key, index) => <label key={key}><span>{["Ш", "Г", "В"][index]}, см</span><input type="number" min="1" max="5000" value={customDimensions[key]} onChange={event => setCustomDimensions(current => ({ ...current, [key]: positiveNumber(event.target.value, current[key]) }))}/></label>)}</div><label className="upload-button"><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,.glb" onChange={event => handleAsset(event.target.files?.[0])}/><span>＋</span><b>Фото товара или готовый GLB</b></label>{customPreview && <img className="upload-preview" src={customPreview} alt="Загруженный товар"/>}{uploadState !== "idle" && <div className={`asset-result ${uploadState}`}><span>{uploadState === "ready" ? "✓" : uploadState === "error" ? "!" : "•••"}</span><div><strong>{customName}</strong><small>{uploadMessage}</small></div></div>}</div>}
-          <div className="ar-state"><i/><p>{arStatus}</p></div><button className="primary" onClick={openAR} disabled={photoPending}>{photoPending ? "Ожидаем 3D-модель" : "Посмотреть у себя"}<span>↗</span></button><p className="privacy">Камера открывается системным AR вашего устройства. MIRRAI не сохраняет изображение комнаты.</p>
+          <div className="ar-state"><i/><p>{arStatus}</p></div><button className="primary" onClick={openAR} disabled={photoPending || scaleState !== "verified"}>{photoPending ? "Ожидаем 3D-модель" : scaleState === "verified" ? "Посмотреть у себя" : scaleState === "error" ? "Проверьте размеры модели" : "Проверяем масштаб 1:1"}<span>↗</span></button><p className="privacy">Камера открывается системным AR устройства. ARKit может показывать немного более узкий кадр, чем приложение «Камера», но это не изменяет физический масштаб модели. MIRRAI не сохраняет изображение комнаты.</p>
         </aside>
       </div>
     </section>

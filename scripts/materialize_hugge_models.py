@@ -32,11 +32,10 @@ PRODUCT_DIMENSIONS_CM = {
 
 
 def target_xyz(extents: np.ndarray, dimensions_cm: tuple[float, float, float]) -> np.ndarray:
-    """Map width to the longer generated horizontal axis and keep Y as height."""
+    """Use glTF's project convention: X=width, Y=height and Z=depth."""
+    _ = extents
     width, depth, height = np.asarray(dimensions_cm, dtype=np.float64) / 100.0
-    if extents[0] >= extents[2]:
-        return np.array([width, height, depth], dtype=np.float64)
-    return np.array([depth, height, width], dtype=np.float64)
+    return np.array([width, height, depth], dtype=np.float64)
 
 
 def materialize(sku: str, dimensions_cm: tuple[float, float, float]) -> Path:

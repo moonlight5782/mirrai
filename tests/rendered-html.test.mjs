@@ -24,7 +24,7 @@ test("widget contract includes product data, scale and store events", async () =
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /params\.get\("widget"\)/);
   assert.match(page, /params\.get\("productId"\)/);
-  assert.match(page, /params\.get\("iosModel"\)/);
+  assert.match(page, /ar-usdz-max-texture-size/);
   assert.match(page, /getDimensions/);
   assert.match(page, /"ar-scale": "fixed"/);
   assert.match(page, /"disable-zoom": true/);
@@ -212,7 +212,7 @@ test("storefront color variants select their corresponding 3D and AR models", as
   assert.match(storefront, /variantsByProduct/); assert.match(storefront, /selectedVariantId/);
   assert.match(widgetRoute, /requestedVariantId/); assert.match(widgetRoute, /productVariants\.sku/);
   assert.match(sdk, /JSON\.stringify\(config\.variants\)/); assert.match(sdk, /selectedVariantId/);
-  assert.match(viewer, /variant-selector/); assert.match(viewer, /selectVariant/); assert.match(viewer, /iosModelSource/);
+  assert.match(viewer, /variant-selector/); assert.match(viewer, /selectVariant/); assert.match(viewer, /scaleState/);
   assert.match(store, /store-variant-picker/); assert.match(store, /selectedVariantId/);
 });
 

@@ -9,9 +9,10 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "test": "npm run models:audit-scale && npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public --ignore-pattern .tmp-* --ignore-pattern .site-package-stage-* --ignore-pattern .dist-build-backup-* --ignore-pattern work",
     "models:optimize-hugge": "node scripts/optimize_hugge_models.mjs",
+    "models:audit-scale": "node scripts/audit_ar_dimensions.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
