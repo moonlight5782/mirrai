@@ -15,6 +15,7 @@ type ModelViewerElement = HTMLElement & {
   getDimensions?: () => { x: number; y: number; z: number };
   updateFraming?: () => Promise<void>;
   jumpCameraToGoal?: () => void;
+  loaded?: boolean;
 };
 
 const products: Product[] = [
@@ -165,9 +166,14 @@ export default function Home() {
     if (view !== "viewer" || !arRef.current) return;
     const viewer = arRef.current;
     let cancelled = false;
+    let verifying = false;
     setScaleState("checking");
     setArStatus("Проверяем размеры модели перед запуском AR…");
     const onLoad = async () => {
+      if (verifying) return;
+      verifying = true;
+      viewer.setAttribute("scale", "1 1 1");
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const source = viewer.getDimensions?.();
       const target = { x: selectedDimensions.width / 100, y: selectedDimensions.height / 100, z: selectedDimensions.depth / 100 };
       if (!source || ![source.x, source.y, source.z, target.x, target.y, target.z].every(value => Number.isFinite(value) && value > 0)) {
@@ -196,6 +202,7 @@ export default function Home() {
       else setArStatus("Медленно направляйте камеру на свободный участок пола…");
     };
     viewer.addEventListener("load", onLoad); viewer.addEventListener("error", onError); viewer.addEventListener("ar-status", onArStatus);
+    if (viewer.loaded) void onLoad();
     return () => { cancelled = true; viewer.removeEventListener("load", onLoad); viewer.removeEventListener("error", onError); viewer.removeEventListener("ar-status", onArStatus); };
   }, [view, modelSource, selected.id, selected.name, selectedVariant?.id, selectedVariant?.colorName, selectedVariant?.sku, selectedDimensions.width, selectedDimensions.height, selectedDimensions.depth, customName, isWidget, targetOrigin]);
 
