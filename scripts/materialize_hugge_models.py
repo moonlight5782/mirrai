@@ -1,5 +1,7 @@
 """Bake verified HUGGE product dimensions into TRELLIS GLBs for 1:1 AR."""
 
+import argparse
+
 from pathlib import Path
 
 import numpy as np
@@ -7,8 +9,8 @@ import trimesh
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_DIR = ROOT / ".tmp-hugge-previews"
-OUTPUT_DIR = ROOT / "public" / "catalog"
+DEFAULT_SOURCE_DIR = ROOT / ".tmp-hugge-previews"
+DEFAULT_OUTPUT_DIR = ROOT / "public" / "catalog"
 
 # Width, depth, height in centimetres. Values are product specifications, not
 # dimensions inferred from the generated mesh or the source photograph.
@@ -38,9 +40,14 @@ def target_xyz(extents: np.ndarray, dimensions_cm: tuple[float, float, float]) -
     return np.array([width, height, depth], dtype=np.float64)
 
 
-def materialize(sku: str, dimensions_cm: tuple[float, float, float]) -> Path:
-    corrected = SOURCE_DIR / f"hugge-{sku}-trellis2-q8-pbr-corrected.glb"
-    source = corrected if corrected.exists() else SOURCE_DIR / f"hugge-{sku}-trellis2-q8-pbr.glb"
+def materialize(
+    sku: str,
+    dimensions_cm: tuple[float, float, float],
+    source_dir: Path,
+    output_dir: Path,
+) -> Path:
+    corrected = source_dir / f"hugge-{sku}-trellis2-q8-pbr-corrected.glb"
+    source = corrected if corrected.exists() else source_dir / f"hugge-{sku}-trellis2-q8-pbr.glb"
     if not source.exists():
         raise FileNotFoundError(source)
 
@@ -63,8 +70,8 @@ def materialize(sku: str, dimensions_cm: tuple[float, float, float]) -> Path:
     ]
     scene.apply_transform(translate)
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output = OUTPUT_DIR / f"hugge-{sku}-trellis2-q8-pbr.glb"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output = output_dir / f"hugge-{sku}-trellis2-q8-pbr.glb"
     output.write_bytes(scene.export(file_type="glb"))
 
     check = trimesh.load(output, force="scene", process=False)
@@ -76,9 +83,29 @@ def materialize(sku: str, dimensions_cm: tuple[float, float, float]) -> Path:
     return output
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--skus",
+        nargs="+",
+        choices=sorted(PRODUCT_DIMENSIONS_CM),
+        default=list(PRODUCT_DIMENSIONS_CM),
+        help="Only materialize the listed HUGGE product IDs.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
-    for sku, dimensions in PRODUCT_DIMENSIONS_CM.items():
-        materialize(sku, dimensions)
+    args = parse_args()
+    for sku in args.skus:
+        materialize(
+            sku,
+            PRODUCT_DIMENSIONS_CM[sku],
+            args.source_dir.resolve(),
+            args.output_dir.resolve(),
+        )
 
 
 if __name__ == "__main__":
