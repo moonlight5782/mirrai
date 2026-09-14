@@ -158,7 +158,7 @@ async function submitGeneration(config: ServiceConfig, file: File, operation: Hf
     return `${operation}:${sessionHash}:${eventId}`;
   }
   const auth = headers(config.token) ?? {};
-  const data = ["", image, null, null, null, null, 30, 5, 1234, 256, true, 8000, true];
+  const data = [image, null, null, null, null, 30, 5, 1234, 256, true, 8000, true];
   const response = await fetch(`${config.url}/call/${operation}`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ data }) });
   if (!response.ok) throw new Error(`hf_submit_${response.status}`);
   const result = await response.json() as { event_id?: string }; if (!result.event_id) throw new Error("hf_submit_invalid"); return `${operation}:${result.event_id}`;

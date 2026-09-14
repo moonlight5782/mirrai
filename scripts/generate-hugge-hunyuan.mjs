@@ -28,14 +28,27 @@ async function generate(item) {
   if (!upload.ok) throw new Error(`upload_${upload.status}`);
   const path = (await upload.json())[0];
   const image = { path, orig_name: basename(fileURLToPath(source)), mime_type: "image/jpeg", meta: { _type: "gradio.FileData" } };
-  const request = await fetch(`${base}/call/generation_all`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ data: [image, null, null, null, null, 12, 5, Number(item.externalId) % 10000000, 256, true, 8000, false] }) });
+  const seed = Number(item.externalId) % 10000000;
+  const request = await fetch(`${base}/call/generation_all`, {
+    method: "POST",
+    headers: { ...auth, "content-type": "application/json" },
+    body: JSON.stringify({
+      // Hunyuan3D-2.1 public API: single image, four optional multiview
+      // images, steps, guidance, seed, octree, background, chunks,
+      // randomize seed.
+      data: [image, null, null, null, null, 30, 5, seed, 256, true, 8000, false],
+    }),
+  });
   if (!request.ok) throw new Error(`submit_${request.status}`);
   const eventId = (await request.json()).event_id;
   if (!eventId) throw new Error("submit_invalid");
   const response = await fetch(`${base}/call/generation_all/${eventId}`, { headers: { ...auth, accept: "text/event-stream" } });
   const payload = await response.text();
   const complete = [...payload.matchAll(/event: complete\s+data: (.+)/g)].at(-1)?.[1];
-  if (!complete) throw new Error(payload.includes("event: error") ? "generation_failed" : "generation_incomplete");
+  if (!complete) {
+    const detail = payload.replace(/\s+/g, " ").trim().slice(-800);
+    throw new Error(payload.includes("event: error") ? `generation_failed: ${detail}` : `generation_incomplete: ${detail}`);
+  }
   const modelUrl = findModel(JSON.parse(complete));
   if (!modelUrl) throw new Error("model_missing");
   const model = await fetch(new URL(modelUrl, base), { headers: auth });
