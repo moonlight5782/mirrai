@@ -1,8 +1,21 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from ".";
-import { platformOperators, shopInvites, shopMembers, shops } from "./schema";
+import { platformOperators, shopMembers, shops } from "./schema";
 
-export type Identity = { userId: string; email: string };
+export type Identity = { userId: string; email: string; emailVerified?: boolean };
+export type ShopRole = "owner" | "editor" | "analyst" | "operator";
+export type ShopPermission = "read" | "catalog:write" | "setup:write" | "members:write" | "generation:request";
+
+const permissions: Record<ShopRole, ReadonlySet<ShopPermission>> = {
+  owner: new Set(["read", "catalog:write", "setup:write", "members:write", "generation:request"]),
+  editor: new Set(["read", "catalog:write", "generation:request"]),
+  analyst: new Set(["read"]),
+  operator: new Set(["read", "catalog:write", "setup:write", "members:write", "generation:request"]),
+};
+
+export function hasShopPermission(role: string, permission: ShopPermission) {
+  return permissions[role as ShopRole]?.has(permission) === true;
+}
 
 async function migrateLegacyOwner(identity: Identity) {
   const db = getDb();
@@ -10,32 +23,16 @@ async function migrateLegacyOwner(identity: Identity) {
   for (const shop of owned) {
     await db.insert(shopMembers).values({ shopId: shop.id, userId: identity.userId, email: identity.email, role: "owner" }).onConflictDoNothing();
   }
-  const email = identity.email.trim().toLowerCase();
-  const matchingMemberships = await db.select().from(shopMembers).where(eq(shopMembers.email, email));
-  for (const membership of matchingMemberships) {
-    await db.insert(shopMembers).values({ shopId: membership.shopId, userId: identity.userId, email, role: membership.role }).onConflictDoNothing();
-  }
 }
 
-async function acceptInvites(identity: Identity) {
-  const db = getDb();
-  const email = identity.email.trim().toLowerCase();
-  const invites = await db.select().from(shopInvites).where(and(eq(shopInvites.email, email), isNull(shopInvites.acceptedAt)));
-  for (const invite of invites) {
-    await db.insert(shopMembers).values({ shopId: invite.shopId, userId: identity.userId, email, role: invite.role }).onConflictDoNothing();
-    await db.update(shopInvites).set({ acceptedAt: new Date().toISOString() }).where(eq(shopInvites.id, invite.id));
-  }
-}
-
-export async function authorizedShop(identity: Identity, slug?: string | null) {
+export async function authorizedShop(identity: Identity, slug?: string | null, permission: ShopPermission = "read") {
   await migrateLegacyOwner(identity);
-  await acceptInvites(identity);
   const db = getDb();
   const rows = await db.select({ shop: shops, role: shopMembers.role }).from(shopMembers).innerJoin(shops, eq(shopMembers.shopId, shops.id)).where(slug ? and(eq(shopMembers.userId, identity.userId), eq(shops.slug, slug)) : eq(shopMembers.userId, identity.userId)).limit(1);
-  if (rows[0]) return rows[0];
+  if (rows[0]) return hasShopPermission(rows[0].role, permission) ? rows[0] : null;
   if (slug && await isPlatformOperator(identity)) {
     const [shop] = await db.select().from(shops).where(eq(shops.slug, slug)).limit(1);
-    if (shop) return { shop, role: "operator" };
+    if (shop) return { shop, role: "operator" as const };
   }
   return null;
 }
@@ -44,14 +41,12 @@ export async function isPlatformOperator(identity: Identity) {
   const db = getDb();
   const [existing] = await db.select().from(platformOperators).where(eq(platformOperators.userId, identity.userId)).limit(1);
   if (existing) return true;
+  if (!identity.emailVerified) return false;
   const normalizedEmail = identity.email.trim().toLowerCase();
   const [emailMatch] = await db.select().from(platformOperators).where(eq(platformOperators.email, normalizedEmail)).limit(1);
   if (emailMatch) {
     await db.insert(platformOperators).values({ userId: identity.userId, email: normalizedEmail }).onConflictDoNothing();
     return true;
   }
-  const [legacyOwner] = await db.select({ id: shops.id }).from(shops).where(eq(shops.ownerUserId, identity.userId)).limit(1);
-  if (!legacyOwner) return false;
-  await db.insert(platformOperators).values({ userId: identity.userId, email: identity.email }).onConflictDoNothing();
-  return true;
+  return false;
 }

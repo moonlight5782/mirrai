@@ -15,6 +15,7 @@ export type AppUser = {
   email: string;
   displayName: string;
   fullName: string | null;
+  emailVerified: boolean;
 };
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -28,12 +29,12 @@ function base64ToBytes(value: string) {
   return Uint8Array.from(binary, character => character.charCodeAt(0));
 }
 
-function randomToken(size = 32) {
+export function randomToken(size = 32) {
   const bytes = crypto.getRandomValues(new Uint8Array(size));
   return bytesToBase64(bytes).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-async function sha256(value: string) {
+export async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -95,7 +96,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   const now = new Date().toISOString();
   const [row] = await getDb().select({ session: authSessions, user: authUsers }).from(authSessions).innerJoin(authUsers, eq(authUsers.id, authSessions.userId)).where(and(eq(authSessions.tokenHash, await sha256(token)), gt(authSessions.expiresAt, now))).limit(1);
   if (!row) return null;
-  return { userId: row.user.id, email: row.user.email, displayName: row.user.displayName || row.user.email, fullName: row.user.displayName || null };
+  return { userId: row.user.id, email: row.user.email, displayName: row.user.displayName || row.user.email, fullName: row.user.displayName || null, emailVerified: Boolean(row.user.emailVerifiedAt) };
 }
 
 export function safeReturnTo(value: string | null | undefined, fallback = "/admin") {

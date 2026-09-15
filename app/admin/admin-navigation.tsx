@@ -3,8 +3,8 @@
 
 import { useEffect, useState } from "react";
 
-type AdminSection = "overview" | "clients" | "catalog" | "setup" | "analytics" | "subscription";
-type ShopOption = { name: string; slug: string };
+type AdminSection = "overview" | "clients" | "catalog" | "setup" | "analytics" | "team" | "subscription";
+type ShopOption = { name: string; slug: string; role: string };
 
 function withShop(path: string, shopSlug: string) {
   return shopSlug ? `${path}?shop=${encodeURIComponent(shopSlug)}` : path;
@@ -18,7 +18,7 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
     let cancelled = false;
     fetch("/api/account", { cache: "no-store" })
       .then(response => response.ok ? response.json() : { shops: [], operator: false })
-      .then(result => { if (!cancelled) { setShops((result.shops ?? []).map((item: ShopOption) => ({ name: item.name, slug: item.slug }))); setOperator(result.operator === true); } })
+      .then(result => { if (!cancelled) { setShops((result.shops ?? []).map((item: ShopOption) => ({ name: item.name, slug: item.slug, role: item.role }))); setOperator(result.operator === true); } })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
@@ -29,6 +29,7 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
       catalog: "/admin/catalog",
       setup: "/admin/setup",
       analytics: "/admin/analytics",
+      team: "/admin/team",
       subscription: "/admin/subscription",
     };
     const section = active === "clients" ? "catalog" : active;
@@ -56,6 +57,7 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
       <a className={active === "catalog" ? "active" : ""} href={withShop("/admin/catalog", shopSlug)}>Каталог моделей</a>
       <a className={active === "setup" ? "active" : ""} href={withShop("/admin/setup", shopSlug)}>Установка</a>
       <a className={active === "analytics" ? "active" : ""} href={withShop("/admin/analytics", shopSlug)}>Аналитика</a>
+      {(operator || shops.find(shop => shop.slug === shopSlug)?.role === "owner") && <a className={active === "team" ? "active" : ""} href={withShop("/admin/team", shopSlug)}>Команда и доступ</a>}
       <b>МАГАЗИН</b>
       <a className={active === "subscription" ? "active" : ""} href={withShop("/admin/subscription", shopSlug)}>Подписка</a>
       <a href="/demo-store">Демонстрация ↗</a>

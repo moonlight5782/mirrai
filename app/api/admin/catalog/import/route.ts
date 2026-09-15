@@ -15,7 +15,7 @@ function number(value?: string) { const parsed = Number((value ?? "").replace(",
 export async function POST(request: Request) {
   const user = await getChatGPTUser(); if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
   const form = await request.formData(); const shopSlug = String(form.get("shop") ?? ""); const file = form.get("file");
-  const access = await authorizedShop(user, shopSlug); if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
+  const access = await authorizedShop(user, shopSlug, "catalog:write"); if (!access) return Response.json({ error: "forbidden" }, { status: 403 });
   if (!(file instanceof File) || file.size > 5_000_000) return Response.json({ error: "invalid_file" }, { status: 400 });
   const rows = parseCsv((await file.text()).replace(/^\uFEFF/, "")); if (rows.length < 2 || rows.length > 2001) return Response.json({ error: "invalid_rows" }, { status: 400 });
   const aliases: Record<string, string> = { "артикул": "sku", "sku": "sku", "название": "name", "name": "name", "категория": "category", "category": "category", "цена": "price", "price": "price", "материал": "material", "material": "material", "ширина": "width", "width": "width", "высота": "height", "height": "height", "глубина": "depth", "depth": "depth", "фото": "images", "image": "images", "images": "images", "ссылка": "source_url", "product_url": "source_url", "source_url": "source_url", "glb": "glb", "usdz": "usdz" };

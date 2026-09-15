@@ -17,7 +17,7 @@ MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product fro
 - nontechnical `/admin/setup` wizard with domain protection, platform-specific copy, installation detection, and developer handoff;
 - public widget configuration by `shopId + SKU` instead of exposing asset details in store code;
 - server-side widget event collection;
-- multi-store memberships, operator client management and email-based owner invitations;
+- multi-store memberships, operator client management and expiring one-time invitation links;
 - CSV catalog import with a downloadable template;
 - first-party GLB/USDZ uploads stored in R2;
 - 30-day AR funnel analytics per store and product;
@@ -101,11 +101,14 @@ The SDK reports its first valid load to the setup wizard, so a store owner can v
 - `/register` and `/login` provide merchant-owned accounts without a ChatGPT login.
 - `/admin` shows the current store state, catalogue coverage, installation, subscription and 30-day funnel.
 - `/admin/clients` creates merchant accounts and assigns the owner email.
+- `/admin/team?shop=SHOP_ID` manages staff access: owners control the team, editors change the catalogue, and analysts have read-only access.
 - `/admin/catalog?shop=SHOP_ID` imports CSV, uploads GLB/USDZ, validates and publishes models.
 - `/admin/setup?shop=SHOP_ID` configures the allowed domain and produces the integration snippet.
 - `/admin/analytics?shop=SHOP_ID` shows the 30-day funnel from widget open to AR placement.
 
 Uploaded binaries are stored in the `UPLOADS` R2 binding and served through immutable asset URLs. The public SDK batches up to 100 SKU configurations per request and watches dynamically rendered product cards.
+
+Invitations are not accepted from an email match alone. MIRRAI creates a random single-use link that expires after seven days; accepting it verifies the invited account and binds its role to one store. API routes enforce the same permissions independently of the visible navigation. Only a platform operator can list all clients, publish reviewed models or operate another store.
 
 ## HUGGE.md pilot
 

@@ -3,6 +3,7 @@ import { getChatGPTUser } from "../../../chatgpt-auth";
 import { getDb } from "../../../../db";
 import { isPlatformOperator } from "../../../../db/authorization";
 import { productModels, products, shopInvites, shops } from "../../../../db/schema";
+import { randomToken, sha256 } from "../../../auth";
 
 function safeSlug(value: string) { return value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60); }
 
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
   const db = getDb();
   try {
     const [created] = await db.insert(shops).values({ name, slug, subscriptionStatus: "trial", trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString(), websiteUrl: body.websiteUrl?.trim().slice(0, 300) || null, plan: "pilot" }).returning();
-    await db.insert(shopInvites).values({ shopId: created.id, email: ownerEmail, role: "owner" });
-    return Response.json({ ok: true, shop: created }, { status: 201 });
+    const token = randomToken();
+    await db.insert(shopInvites).values({ shopId: created.id, email: ownerEmail, role: "owner", tokenHash: await sha256(token), expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() });
+    return Response.json({ ok: true, shop: created, invitationUrl: `/invite?token=${encodeURIComponent(token)}` }, { status: 201 });
   } catch { return Response.json({ error: "slug_exists" }, { status: 409 }); }
 }

@@ -8,7 +8,7 @@ import { assets, productModels, products } from "../../../../db/schema";
 export async function POST(request: Request) {
   const user = await getChatGPTUser(); if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
   const form = await request.formData(); const shopSlug = String(form.get("shop") ?? ""); const productId = Number(form.get("productId")); const file = form.get("file"); const kind = String(form.get("kind") ?? "glb");
-  const access = await authorizedShop(user, shopSlug); if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
+  const access = await authorizedShop(user, shopSlug, "catalog:write"); if (!access) return Response.json({ error: "forbidden" }, { status: 403 });
   const [product] = await getDb().select({ id: products.id }).from(products).where(and(eq(products.id, productId), eq(products.shopId, access.shop.id))).limit(1);
   const isImage = kind === "photo";
   const maxSize = isImage ? 12_000_000 : 50_000_000;

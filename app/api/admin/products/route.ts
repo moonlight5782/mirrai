@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-  const access = await authorizedShop(user, typeof body.shop === "string" ? body.shop : "");
+  const access = await authorizedShop(user, typeof body.shop === "string" ? body.shop : "", "catalog:write");
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
   const sku = typeof body.sku === "string" ? body.sku.trim().slice(0, 120) : "";
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 160) : "";
@@ -33,7 +33,7 @@ export async function PATCH(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-  const access = await authorizedShop(user, typeof body.shop === "string" ? body.shop : "");
+  const access = await authorizedShop(user, typeof body.shop === "string" ? body.shop : "", "catalog:write");
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
   const productId = Number(body.productId);
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 160) : "";

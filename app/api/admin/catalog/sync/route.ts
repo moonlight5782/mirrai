@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
   const body = await request.json().catch(() => ({})) as { shop?: string; offset?: number };
-  const access = await authorizedShop(user, body.shop);
+  const access = await authorizedShop(user, body.shop, "catalog:write");
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
   const source = validatedCatalogSource(access.shop.websiteUrl, access.shop.catalogSourceUrl);
   if (!source) return Response.json({ error: "catalog_source_not_configured" }, { status: 400 });

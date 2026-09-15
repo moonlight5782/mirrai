@@ -152,7 +152,7 @@ test("merchant accounts use durable password sessions instead of ChatGPT identit
 });
 
 test("anonymous visitors get a working admin entry instead of an auth redirect", async () => {
-  for (const path of ["/admin/clients", "/admin/catalog?shop=nordform", "/admin/analytics?shop=nordform", "/admin/setup?shop=nordform", "/admin/subscription?shop=nordform"]) {
+  for (const path of ["/admin/clients", "/admin/catalog?shop=nordform", "/admin/analytics?shop=nordform", "/admin/setup?shop=nordform", "/admin/team?shop=nordform", "/admin/subscription?shop=nordform"]) {
     const response = await render(path);
     assert.equal(response.status, 200);
     const html = await response.text();
@@ -203,10 +203,12 @@ test("nontechnical setup wizard provides universal installation and domain check
   assert.match(migration, /installation_status/);
 });
 
-test("commercial pilot architecture supports tenants, imports, R2 assets and scalable SDK", async () => {
-  const [schema, auth, clients, importer, upload, config, sdk, hosting, migration] = await Promise.all([
+test("commercial pilot architecture supports secure tenant roles, imports, R2 assets and scalable SDK", async () => {
+  const [schema, auth, invitations, members, clients, importer, upload, config, sdk, hosting, migration] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/authorization.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/invitations.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/members/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/clients/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/catalog/import/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/assets/route.ts", import.meta.url), "utf8"),
@@ -216,7 +218,7 @@ test("commercial pilot architecture supports tenants, imports, R2 assets and sca
     readFile(new URL("../drizzle/0002_complex_tigra.sql", import.meta.url), "utf8"),
   ]);
   assert.match(schema, /shopMembers/); assert.match(schema, /shopInvites/); assert.match(schema, /platformOperators/); assert.match(schema, /export const assets/);
-  assert.match(auth, /acceptInvites/); assert.match(clients, /ownerEmail/); assert.match(importer, /parseCsv/); assert.match(upload, /getUploadsBucket/);
+  assert.match(auth, /catalog:write/); assert.match(auth, /members:write/); assert.match(invitations, /acceptInvitation/); assert.match(invitations, /tokenHash/); assert.match(members, /invitationUrl/); assert.match(clients, /ownerEmail/); assert.match(importer, /parseCsv/); assert.match(upload, /getUploadsBucket/);
   assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "2\.0\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
   assert.match(hosting, /"r2": "UPLOADS"/); assert.match(migration, /CREATE TABLE `assets`/);
 });

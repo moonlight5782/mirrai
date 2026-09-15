@@ -46,6 +46,7 @@ export const authUsers = sqliteTable("auth_users", {
   passwordHash: text("password_hash").notNull(),
   passwordSalt: text("password_salt").notNull(),
   passwordIterations: integer("password_iterations").notNull().default(210000),
+  emailVerifiedAt: text("email_verified_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_auth_users_email").on(table.email)]);
@@ -71,9 +72,12 @@ export const shopInvites = sqliteTable("shop_invites", {
   shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
   email: text("email").notNull(),
   role: text("role").notNull().default("owner"),
+  tokenHash: text("token_hash"),
+  expiresAt: text("expires_at"),
   acceptedAt: text("accepted_at"),
+  acceptedByUserId: text("accepted_by_user_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, table => [uniqueIndex("idx_shop_invites_shop_email").on(table.shopId, table.email), index("idx_shop_invites_email").on(table.email)]);
+}, table => [uniqueIndex("idx_shop_invites_shop_email").on(table.shopId, table.email), index("idx_shop_invites_email").on(table.email), uniqueIndex("idx_shop_invites_token_hash").on(table.tokenHash)]);
 
 export const products = sqliteTable("products", {
   id: integer("id").primaryKey({ autoIncrement: true }),

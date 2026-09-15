@@ -53,6 +53,7 @@ export async function POST(request: Request) {
   const access = await authorizedShop(user, body.shop);
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
   const operator = await isPlatformOperator(user);
+  if (body.action === "request" && !await authorizedShop(user, body.shop, "generation:request")) return Response.json({ error: "forbidden" }, { status: 403 });
   if (body.action === "run") return operator ? runJobs(access.shop, new URL(request.url).origin) : Response.json({ error: "operator_required" }, { status: 403 });
   if (body.action !== "request" && !operator) return Response.json({ error: "operator_required" }, { status: 403 });
 

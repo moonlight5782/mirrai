@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
   const body = await request.json() as { shop?: string; productId?: number; status?: string; glbUrl?: string; usdzUrl?: string; validationMessage?: string };
-  const access = await authorizedShop(user, body.shop);
+  const access = await authorizedShop(user, body.shop, "catalog:write");
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
   const shop = access.shop;
   const productId = Number(body.productId);
