@@ -85,7 +85,7 @@ For catalog-backed installation, the store only supplies merchant and SKU identi
 MirraiWidget.mount({ target: "#mirrai-slot", shopId: "nordform", sku: "CLOUD-001" });
 ```
 
-The SDK requests `/api/widget/config`, and the button appears only when the subscription is active and the model status is `published`. Administrators manage coverage, GLB/USDZ URLs and validation notes at `/admin/catalog`. The public product demo stays open, while every dashboard section uses a dedicated sign-in gate and server-side shop authorization.
+The SDK requests `/api/widget/config`, and the button appears only when the subscription is active and the model status is `published`. Administrators manage coverage, photos, GLB/USDZ uploads and validation notes at `/admin/catalog`. The public product demo stays open, while every dashboard section uses MIRRAI email/password sessions and server-side shop authorization. Merchant passwords are stored as salted PBKDF2 hashes; session tokens are kept only in secure HttpOnly cookies and hashed in D1.
 
 For a full-store installation, add the script once and mark each product-card slot with its SKU. The SDK scans all matching slots automatically:
 
@@ -98,6 +98,8 @@ The SDK reports its first valid load to the setup wizard, so a store owner can v
 
 ## Commercial pilot operations
 
+- `/register` and `/login` provide merchant-owned accounts without a ChatGPT login.
+- `/admin` shows the current store state, catalogue coverage, installation, subscription and 30-day funnel.
 - `/admin/clients` creates merchant accounts and assigns the owner email.
 - `/admin/catalog?shop=SHOP_ID` imports CSV, uploads GLB/USDZ, validates and publishes models.
 - `/admin/setup?shop=SHOP_ID` configures the allowed domain and produces the integration snippet.

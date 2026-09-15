@@ -10,6 +10,11 @@ async function migrateLegacyOwner(identity: Identity) {
   for (const shop of owned) {
     await db.insert(shopMembers).values({ shopId: shop.id, userId: identity.userId, email: identity.email, role: "owner" }).onConflictDoNothing();
   }
+  const email = identity.email.trim().toLowerCase();
+  const matchingMemberships = await db.select().from(shopMembers).where(eq(shopMembers.email, email));
+  for (const membership of matchingMemberships) {
+    await db.insert(shopMembers).values({ shopId: membership.shopId, userId: identity.userId, email, role: membership.role }).onConflictDoNothing();
+  }
 }
 
 async function acceptInvites(identity: Identity) {
@@ -39,6 +44,12 @@ export async function isPlatformOperator(identity: Identity) {
   const db = getDb();
   const [existing] = await db.select().from(platformOperators).where(eq(platformOperators.userId, identity.userId)).limit(1);
   if (existing) return true;
+  const normalizedEmail = identity.email.trim().toLowerCase();
+  const [emailMatch] = await db.select().from(platformOperators).where(eq(platformOperators.email, normalizedEmail)).limit(1);
+  if (emailMatch) {
+    await db.insert(platformOperators).values({ userId: identity.userId, email: normalizedEmail }).onConflictDoNothing();
+    return true;
+  }
   const [legacyOwner] = await db.select({ id: shops.id }).from(shops).where(eq(shops.ownerUserId, identity.userId)).limit(1);
   if (!legacyOwner) return false;
   await db.insert(platformOperators).values({ userId: identity.userId, email: identity.email }).onConflictDoNothing();

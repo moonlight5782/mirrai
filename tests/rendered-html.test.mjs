@@ -96,6 +96,14 @@ test("HUGGE product cards provide a navigable full-screen photo gallery", async 
   assert.match(store, /onTouchStart/);
 });
 
+test("product detail always opens at the top of the storefront", async () => {
+  const store = await readFile(new URL("../app/demo-store/store.tsx", import.meta.url), "utf8");
+  assert.match(store, /scrollRestoration = "manual"/);
+  assert.match(store, /function scrollPageTop[\s\S]*style\.scrollBehavior = "auto"/);
+  assert.match(store, /function openProduct[\s\S]*scrollPageTop\(\)/);
+  assert.match(store, /\[detailOpen, selectedSku\]/);
+});
+
 test("embeddable SDK creates a product-aware accessible AR launcher", async () => {
   const sdk = await readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8");
   assert.match(sdk, /window\.MirraiWidget/);
@@ -127,13 +135,29 @@ test("admin catalog is backed by durable model lifecycle data", async () => {
   assert.match(migration, /CLOUD-001/);
 });
 
+test("merchant accounts use durable password sessions instead of ChatGPT identity", async () => {
+  const [schema, auth, login, register] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/register/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /authUsers/);
+  assert.match(schema, /authSessions/);
+  assert.match(schema, /authLoginAttempts/);
+  assert.match(auth, /PBKDF2/);
+  assert.match(auth, /httpOnly: true/);
+  assert.match(login, /temporarily_blocked/);
+  assert.match(register, /createSession/);
+});
+
 test("anonymous visitors get a working admin entry instead of an auth redirect", async () => {
   for (const path of ["/admin/clients", "/admin/catalog?shop=nordform", "/admin/analytics?shop=nordform", "/admin/setup?shop=nordform", "/admin/subscription?shop=nordform"]) {
     const response = await render(path);
     assert.equal(response.status, 200);
     const html = await response.text();
     assert.match(html, /Войти в кабинет/i);
-    assert.match(html, /signin-with-chatgpt/i);
+    assert.match(html, /\/login\?returnTo=/i);
     assert.match(html, /Клиенты/i);
     assert.match(html, /Каталог/i);
     assert.match(html, /Аналитика/i);

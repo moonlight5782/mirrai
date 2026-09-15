@@ -211,6 +211,20 @@
       "when": 1789401600000,
       "tag": "0029_restore_regenerated_hugge_models",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1789454957725,
+      "tag": "0030_brave_ben_urich",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1789455839131,
+      "tag": "0031_friendly_piledriver",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 
-type AdminSection = "clients" | "catalog" | "setup" | "analytics" | "subscription";
+type AdminSection = "overview" | "clients" | "catalog" | "setup" | "analytics" | "subscription";
 type ShopOption = { name: string; slug: string };
 
 function withShop(path: string, shopSlug: string) {
@@ -25,6 +25,7 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
 
   function changeShop(nextShop: string) {
     const paths: Record<Exclude<AdminSection, "clients">, string> = {
+      overview: "/admin",
       catalog: "/admin/catalog",
       setup: "/admin/setup",
       analytics: "/admin/analytics",
@@ -32,6 +33,11 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
     };
     const section = active === "clients" ? "catalog" : active;
     window.location.assign(withShop(paths[section], nextShop));
+  }
+
+  async function signOut() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.assign("/");
   }
 
   return <aside className="admin-sidebar">
@@ -45,6 +51,7 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
     </label>}
     <nav aria-label="Кабинет магазина">
       <b>УПРАВЛЕНИЕ</b>
+      <a className={active === "overview" ? "active" : ""} href={withShop("/admin", shopSlug)}>Обзор</a>
       {operator && <a className={active === "clients" ? "active" : ""} href="/admin/clients">Клиенты</a>}
       <a className={active === "catalog" ? "active" : ""} href={withShop("/admin/catalog", shopSlug)}>Каталог моделей</a>
       <a className={active === "setup" ? "active" : ""} href={withShop("/admin/setup", shopSlug)}>Установка</a>
@@ -53,6 +60,6 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
       <a className={active === "subscription" ? "active" : ""} href={withShop("/admin/subscription", shopSlug)}>Подписка</a>
       <a href="/demo-store">Демонстрация ↗</a>
     </nav>
-    <div><small>{operator ? "Оператор MIRRAI" : "Владелец магазина"}</small><span>{displayName}</span><a className="admin-signout" href="/signout-with-chatgpt?return_to=%2F">Выйти</a></div>
+    <div><small>{operator ? "Оператор MIRRAI" : "Владелец магазина"}</small><span>{displayName}</span><button type="button" className="admin-signout" onClick={() => void signOut()}>Выйти</button></div>
   </aside>;
 }

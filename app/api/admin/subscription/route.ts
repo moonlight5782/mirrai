@@ -12,5 +12,6 @@ export async function GET(request: Request) {
   if (!access) return Response.json({ error: "shop_not_found" }, { status: 404 });
   const rows = await getDb().select({ status: productModels.status }).from(products).leftJoin(productModels, eq(productModels.productId, products.id)).where(eq(products.shopId, access.shop.id));
   const period = subscriptionAccess(access.shop);
-  return Response.json({ shop: { name: access.shop.name, slug: access.shop.slug, plan: access.shop.plan, subscriptionStatus: period.status }, counts: { total: rows.length, ready: rows.filter(row => row.status === "published").length }, access: period, billingConfigured: false }, { headers: { "Cache-Control": "no-store" } });
+  const remainingDays = period.expiresAt ? Math.max(0, Math.ceil((new Date(period.expiresAt).getTime() - Date.now()) / 86400000)) : null;
+  return Response.json({ shop: { name: access.shop.name, slug: access.shop.slug, plan: access.shop.plan, subscriptionStatus: period.status, trialEndsAt: access.shop.trialEndsAt, subscriptionEndsAt: access.shop.subscriptionEndsAt }, counts: { total: rows.length, ready: rows.filter(row => row.status === "published").length }, access: { ...period, remainingDays }, billingConfigured: false }, { headers: { "Cache-Control": "no-store" } });
 }

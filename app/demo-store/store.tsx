@@ -18,6 +18,16 @@ function productName(item: CatalogItem, variant?: CatalogVariant) {
   const withVariantColor = item.name.replace(/(серый|зел[её]ный|белый|ч[её]рный)\s+цвет/iu, `${variant.colorName} цвет`);
   return withVariantColor === item.name ? `${item.name} — ${variant.colorName}` : withVariantColor;
 }
+function scrollPageTop() {
+  const root = document.documentElement;
+  const previous = root.style.scrollBehavior;
+  root.style.scrollBehavior = "auto";
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    root.style.scrollBehavior = previous;
+  });
+}
 
 export function DemoStore() {
   const [data, setData] = useState<CatalogData | null>(null);
@@ -39,12 +49,17 @@ export function DemoStore() {
   const searchInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+  }, []);
+
+  useEffect(() => {
     fetch("/api/storefront/catalog?shop=hugge-md", { cache: "no-store" }).then(response => response.ok ? response.json() : Promise.reject()).then((catalog: CatalogData) => {
       setData(catalog);
       const requestedSku = new URLSearchParams(window.location.search).get("product");
       const requestedProduct = catalog.items.find(item => item.sku === requestedSku);
       setSelectedSku(requestedProduct?.sku ?? catalog.items.find(item => item.demoAvailable)?.sku ?? catalog.items[0]?.sku ?? "");
       setDetailOpen(Boolean(requestedProduct));
+      if (requestedProduct) requestAnimationFrame(scrollPageTop);
     }).catch(() => setEvent("Каталог временно недоступен"));
   }, []);
 
@@ -102,6 +117,10 @@ export function DemoStore() {
     window.addEventListener("keydown", closeOnEscape);
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", closeOnEscape); };
   }, [cartOpen]);
+  useEffect(() => {
+    if (!detailOpen) return;
+    scrollPageTop();
+  }, [detailOpen, selectedSku]);
 
   useEffect(() => {
     if (!detailOpen || !selected?.demoAvailable || !selected.model) return;
@@ -120,7 +139,7 @@ export function DemoStore() {
     else url.searchParams.delete("product");
     window.history.pushState({ product: sku ?? null }, "", `${url.pathname}${url.search}`);
   }
-  function openProduct(item: CatalogItem) { setSelectedSku(item.sku); setSelectedVariantId(""); setActiveImageIndex(0); setLightboxOpen(false); setCartOpen(false); setDetailOpen(true); setProductUrl(item.sku); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function openProduct(item: CatalogItem) { scrollPageTop(); setSelectedSku(item.sku); setSelectedVariantId(""); setActiveImageIndex(0); setLightboxOpen(false); setCartOpen(false); setDetailOpen(true); setProductUrl(item.sku); }
   function closeProduct() { setDetailOpen(false); setProductUrl(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   function showCategory(name: string) { setCategory(name); setFavoritesOnly(false); setDetailOpen(false); setMobileMenuOpen(false); setProductUrl(); queueMicrotask(() => document.querySelector(".shop-catalog")?.scrollIntoView({ behavior: "smooth" })); }
   function openSearch() { setDetailOpen(false); setFavoritesOnly(false); setMobileMenuOpen(false); setProductUrl(); queueMicrotask(() => { document.querySelector(".shop-catalog")?.scrollIntoView({ behavior: "smooth" }); searchInput.current?.focus(); }); }

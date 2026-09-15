@@ -204,7 +204,7 @@ export default function Home() {
     viewer.addEventListener("load", onLoad); viewer.addEventListener("error", onError); viewer.addEventListener("ar-status", onArStatus);
     if (viewer.loaded) void onLoad();
     return () => { cancelled = true; viewer.removeEventListener("load", onLoad); viewer.removeEventListener("error", onError); viewer.removeEventListener("ar-status", onArStatus); };
-  }, [view, modelSource, selected.id, selected.name, selectedVariant?.id, selectedVariant?.colorName, selectedVariant?.sku, selectedDimensions.width, selectedDimensions.height, selectedDimensions.depth, customName, isWidget, targetOrigin]);
+  }, [view, modelSource, selected.id, selected.name, selectedVariant?.id, selectedVariant?.colorName, selectedVariant?.sku, selectedDimensions, customName, isWidget, targetOrigin]);
 
   async function openAR() {
     if (photoPending) { setArStatus("Сначала дождитесь готовой 3D-модели"); return; }

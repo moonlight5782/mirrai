@@ -39,6 +39,33 @@ export const platformOperators = sqliteTable("platform_operators", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_platform_operators_user").on(table.userId)]);
 
+export const authUsers = sqliteTable("auth_users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  displayName: text("display_name").notNull().default(""),
+  passwordHash: text("password_hash").notNull(),
+  passwordSalt: text("password_salt").notNull(),
+  passwordIterations: integer("password_iterations").notNull().default(210000),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("idx_auth_users_email").on(table.email)]);
+
+export const authSessions = sqliteTable("auth_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("idx_auth_sessions_token_hash").on(table.tokenHash), index("idx_auth_sessions_user_expires").on(table.userId, table.expiresAt)]);
+
+export const authLoginAttempts = sqliteTable("auth_login_attempts", {
+  email: text("email").primaryKey(),
+  attempts: integer("attempts").notNull().default(0),
+  windowStartedAt: text("window_started_at").notNull(),
+  blockedUntil: text("blocked_until"),
+});
+
 export const shopInvites = sqliteTable("shop_invites", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),

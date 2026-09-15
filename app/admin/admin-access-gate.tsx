@@ -22,9 +22,10 @@ export function AdminAccessGate({ section, returnTo }: { section: AdminSection; 
         <div className="admin-gate-copy">
           <p>ЗАЩИЩЁННЫЙ КАБИНЕТ</p>
           <h1>{section === "Кабинет" ? "Управляйте AR\u2011витриной" : section}</h1>
-          <span>Войдите, чтобы открыть данные магазина. После входа мы вернём вас именно в этот раздел.</span>
+          <span>Войдите по рабочей почте и паролю. После входа мы вернём вас именно в этот раздел.</span>
           <a className="admin-gate-login" href={chatGPTSignInPath(returnTo)}>Войти в кабинет <b>→</b></a>
-          <small>Данные каталогов и клиентов не показываются посторонним посетителям.</small>
+          <a className="admin-gate-register" href={`/register?returnTo=${encodeURIComponent(returnTo)}`}>Создать аккаунт магазина</a>
+          <small>Кабинет и данные каждого магазина доступны только его сотрудникам.</small>
         </div>
         <div className="admin-gate-sections">
           {sections.map((item, index) => (
