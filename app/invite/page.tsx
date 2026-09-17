@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getCurrentUser } from "../auth";
 import { InviteClient } from "./invite-client";
 
@@ -9,5 +10,5 @@ export default async function InvitePage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   const token = Array.isArray(params.token) ? params.token[0] : params.token ?? "";
   const user = await getCurrentUser();
-  return <main className="onboarding-gate"><a className="brand" href="/">MIRR<span>AI</span></a><section><InviteClient token={token} signedIn={Boolean(user)} currentEmail={user?.email}/></section></main>;
+  return <main className="onboarding-gate"><Link className="brand" href="/">MIRR<span>AI</span></Link><section><InviteClient token={token} signedIn={Boolean(user)} currentEmail={user?.email}/></section></main>;
 }
