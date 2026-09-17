@@ -105,7 +105,11 @@ test("product detail always opens at the top of the storefront", async () => {
 });
 
 test("embeddable SDK creates a product-aware accessible AR launcher", async () => {
-  const sdk = await readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8");
+  const [sdk, viewer, styles] = await Promise.all([
+    readFile(new URL("../public/mirrai-widget.js", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
   assert.match(sdk, /window\.MirraiWidget/);
   assert.match(sdk, /xr-spatial-tracking/);
   assert.match(sdk, /aria-modal/);
@@ -116,6 +120,10 @@ test("embeddable SDK creates a product-aware accessible AR launcher", async () =
   assert.match(sdk, /shopId/);
   assert.match(sdk, /textured: "1"/);
   assert.match(sdk, /textured: config\.textured/);
+  assert.match(sdk, /mirrai-ar-dialog/);
+  assert.match(sdk, /100dvh/);
+  assert.match(viewer, /camera-orbit": "35deg 68deg 120%"/);
+  assert.match(styles, /Keep the whole 3D object visible/);
 });
 
 test("admin catalog is backed by durable model lifecycle data", async () => {
