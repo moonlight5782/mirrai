@@ -56,6 +56,14 @@ function safeVariants(value: string | null): ProductVariant[] {
 
 function dimensionsLabel(value: Dimensions) { return `${value.width} × ${value.depth} × ${value.height} см`; }
 
+function previewCameraRadius(value: Dimensions, viewportAspect: number) {
+  const safeAspect = Math.max(.55, Math.min(1.8, viewportAspect || 1));
+  const furnitureRatio = Math.max(value.width, value.depth) / Math.max(value.height, 1);
+  const portraitFactor = safeAspect < 1 ? Math.min(1.55, 1 / safeAspect) : 1;
+  const wideFurnitureFactor = Math.min(1.3, 1 + Math.max(0, furnitureRatio - 1.55) * .08);
+  return Math.round(Math.max(120, Math.min(225, 120 * portraitFactor * wideFurnitureFactor)));
+}
+
 export default function Home() {
   const [view, setView] = useState<View>("landing");
   const [active, setActive] = useState(0);
@@ -169,6 +177,12 @@ export default function Home() {
     let verifying = false;
     setScaleState("checking");
     setArStatus("Проверяем размеры модели перед запуском AR…");
+    const fitPreviewCamera = () => {
+      const viewportAspect = viewer.clientWidth / Math.max(viewer.clientHeight, 1);
+      const radius = previewCameraRadius(selectedDimensions, viewportAspect);
+      viewer.setAttribute("camera-orbit", `35deg 68deg ${radius}%`);
+      viewer.jumpCameraToGoal?.();
+    };
     const onLoad = async () => {
       if (verifying) return;
       verifying = true;
@@ -184,7 +198,7 @@ export default function Home() {
       const scale = [clamp(target.x / source.x), clamp(target.y / source.y), clamp(target.z / source.z)];
       viewer.setAttribute("scale", scale.map(value => value.toFixed(7)).join(" "));
       await viewer.updateFraming?.();
-      viewer.jumpCameraToGoal?.();
+      fitPreviewCamera();
       await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const measured = viewer.getDimensions?.();
       const withinTolerance = measured && (["x", "y", "z"] as const).every(axis => Math.abs(measured[axis] - target[axis]) <= Math.max(.005, target[axis] * .005));
@@ -202,8 +216,10 @@ export default function Home() {
       else setArStatus("Медленно направляйте камеру на свободный участок пола…");
     };
     viewer.addEventListener("load", onLoad); viewer.addEventListener("error", onError); viewer.addEventListener("ar-status", onArStatus);
+    const resizeObserver = new ResizeObserver(() => { if (viewer.loaded) fitPreviewCamera(); });
+    resizeObserver.observe(viewer);
     if (viewer.loaded) void onLoad();
-    return () => { cancelled = true; viewer.removeEventListener("load", onLoad); viewer.removeEventListener("error", onError); viewer.removeEventListener("ar-status", onArStatus); };
+    return () => { cancelled = true; resizeObserver.disconnect(); viewer.removeEventListener("load", onLoad); viewer.removeEventListener("error", onError); viewer.removeEventListener("ar-status", onArStatus); };
   }, [view, modelSource, selected.id, selected.name, selectedVariant?.id, selectedVariant?.colorName, selectedVariant?.sku, selectedDimensions, customName, isWidget, targetOrigin]);
 
   async function openAR() {
@@ -251,8 +267,8 @@ export default function Home() {
       <div className="viewer-grid">
         {!isWidget && <aside className="catalog-panel"><div className="panel-title"><span>Каталог</span><small>{catalog.length} модели</small></div>{catalog.map((item, index) => <button key={item.id} className={`product ${active === index && !customName ? "active" : ""}`} onClick={() => selectProduct(index)}><i style={{ background: item.color }}><b>▰</b></i><span><small>{item.category}</small><strong>{item.name}</strong><em>{item.price}</em></span><b className="select-mark">{active === index && !customName ? "✓" : "+"}</b></button>)}</aside>}
         <div className="ar-stage">
-          {React.createElement("model-viewer", { key: modelSource, ref: arRef, src: modelSource, alt: `3D-модель ${customName || selected.name}${selectedVariant ? `, цвет ${selectedVariant.colorName}` : ""}`, ar: true, "ar-modes": "webxr scene-viewer quick-look", "ar-placement": "floor", "ar-scale": "fixed", "ar-usdz-max-texture-size": "2048", "camera-controls": true, "disable-zoom": true, "touch-action": "pan-y", "shadow-intensity": ".92", "shadow-softness": ".88", exposure, "environment-image": "neutral", "tone-mapping": "neutral", "xr-environment": true, "camera-orbit": "35deg 68deg 120%", "field-of-view": "45deg" }, React.createElement("button", { slot: "ar-button", className: "native-ar-button", disabled: scaleState !== "verified", "aria-disabled": scaleState !== "verified" }, scaleState === "verified" ? "Посмотреть у себя" : "Проверяем 1:1", React.createElement("span", null, "↗")))}
-          <div className="room-preview"><i className="preview-window"/><i className="preview-floor"/><span>Вращайте модель пальцем</span></div>
+          {React.createElement("model-viewer", { key: modelSource, ref: arRef, src: modelSource, alt: `3D-модель ${customName || selected.name}${selectedVariant ? `, цвет ${selectedVariant.colorName}` : ""}`, ar: true, "ar-modes": "webxr scene-viewer quick-look", "ar-placement": "floor", "ar-scale": "fixed", "ar-usdz-max-texture-size": "2048", "camera-controls": true, "touch-action": "pan-y", "shadow-intensity": ".92", "shadow-softness": ".88", exposure, "environment-image": "neutral", "tone-mapping": "neutral", "xr-environment": true, "camera-orbit": "35deg 68deg 120%", "field-of-view": "45deg" }, React.createElement("button", { slot: "ar-button", className: "native-ar-button", disabled: scaleState !== "verified", "aria-disabled": scaleState !== "verified" }, scaleState === "verified" ? "Посмотреть у себя" : "Проверяем 1:1", React.createElement("span", null, "↗")))}
+          <div className="room-preview"><i className="preview-window"/><i className="preview-floor"/><span>Вращайте одним пальцем · масштабируйте двумя</span></div>
           {photoPending && <div className="reconstruction-screen">{customPreview && <img src={customPreview} alt="Исходная фотография предмета"/>}<p>Создаём AR-модель</p><div className="generation-steps"><span className="done">Фото</span><span className={uploadState === "generating" ? "active" : ""}>Геометрия</span><span>PBR</span><span>GLB</span></div><small>{uploadMessage}</small></div>}
           <div className="viewer-badges"><span>{customModel ? "MODEL MATERIALS" : selected.textured ? "PBR MATERIALS" : "GEOMETRY PREVIEW"}</span><span>{scaleState === "verified" ? "AR SCALE 1:1 ✓" : "AR SCALE CHECK"}</span><span>ADAPTIVE LIGHT</span></div>
         </div>

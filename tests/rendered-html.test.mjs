@@ -27,7 +27,8 @@ test("widget contract includes product data, scale and store events", async () =
   assert.match(page, /ar-usdz-max-texture-size/);
   assert.match(page, /getDimensions/);
   assert.match(page, /"ar-scale": "fixed"/);
-  assert.match(page, /"disable-zoom": true/);
+  assert.doesNotMatch(page, /"disable-zoom": true/);
+  assert.match(page, /previewCameraRadius/);
   assert.match(page, /"tone-mapping": "neutral"/);
   assert.match(page, /"xr-environment": true/);
   assert.match(page, /"shadow-intensity": "\.92"/);
@@ -123,6 +124,10 @@ test("embeddable SDK creates a product-aware accessible AR launcher", async () =
   assert.match(sdk, /mirrai-ar-dialog/);
   assert.match(sdk, /100dvh/);
   assert.match(viewer, /camera-orbit": "35deg 68deg 120%"/);
+  assert.match(viewer, /previewCameraRadius/);
+  assert.match(viewer, /ResizeObserver/);
+  assert.doesNotMatch(viewer, /"disable-zoom": true/);
+  assert.match(viewer, /масштабируйте двумя/);
   assert.match(styles, /Keep the whole 3D object visible/);
 });
 
