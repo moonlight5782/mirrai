@@ -67,6 +67,13 @@ export const authLoginAttempts = sqliteTable("auth_login_attempts", {
   blockedUntil: text("blocked_until"),
 });
 
+export const apiRateLimits = sqliteTable("api_rate_limits", {
+  bucketKey: text("bucket_key").primaryKey(),
+  windowStartedAt: integer("window_started_at").notNull(),
+  count: integer("count").notNull().default(0),
+  expiresAt: integer("expires_at").notNull(),
+}, table => [index("idx_api_rate_limits_expires").on(table.expiresAt)]);
+
 export const shopInvites = sqliteTable("shop_invites", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),

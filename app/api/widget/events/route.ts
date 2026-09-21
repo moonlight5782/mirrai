@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { products, productVariants, shops, widgetEvents } from "../../../../db/schema";
 import { subscriptionAccess } from "../../../../db/subscription.mjs";
 import { widgetDomainAllowed, widgetJson, widgetOptions } from "../cors";
+import { rateLimit, rateLimitHeaders } from "../../../../lib/rate-limit";
 
 const allowedEvents = new Set(["widget_open", "model_ready", "ar_open", "object_placed"]);
 export function OPTIONS(request: Request) { return widgetOptions(request); }
@@ -10,6 +11,8 @@ export function OPTIONS(request: Request) { return widgetOptions(request); }
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { shopId?: string; sku?: string; event?: string } | null;
   if (!body || typeof body.shopId !== "string" || typeof body.sku !== "string" || typeof body.event !== "string" || !body.shopId || !body.sku || !allowedEvents.has(body.event)) return widgetJson(request, { error: "invalid_event" }, { status: 400 });
+  const throttle = await rateLimit(request, "widget-events", 80, 60, body.shopId.slice(0, 80));
+  if (!throttle.allowed) return widgetJson(request, { error: "rate_limited" }, { status: 429, headers: rateLimitHeaders(throttle.retryAfter) });
   const db = getDb();
   const selection = { shop: shops, shopId: shops.id, productId: products.id, allowedDomains: shops.allowedDomains };
   let [row] = await db.select(selection).from(products).innerJoin(shops, eq(products.shopId, shops.id)).where(and(eq(shops.slug, body.shopId.slice(0, 80)), eq(products.sku, body.sku.slice(0, 120)), eq(products.active, true))).limit(1);

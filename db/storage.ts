@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 
 type StoredObject = { body: BodyInit; size: number; httpEtag?: string };
 type UploadBucket = {
-  put(key: string, value: ArrayBuffer, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
+  put(key: string, value: BodyInit, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
   get(key: string): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
 };

@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { productModels, products, productVariants, shops } from "../../../../db/schema";
 import { widgetDomainAllowed, widgetJson, widgetOptions } from "../cors";
 import { subscriptionAccess } from "../../../../db/subscription.mjs";
+import { rateLimit, rateLimitHeaders } from "../../../../lib/rate-limit";
 
 export function OPTIONS(request: Request) { return widgetOptions(request); }
 
@@ -37,6 +38,8 @@ export async function GET(request: Request) {
   const shopSlug = url.searchParams.get("shop")?.slice(0, 80) ?? "";
   const sku = url.searchParams.get("sku")?.slice(0, 120) ?? "";
   if (!shopSlug || !sku) return widgetJson(request, { available: false, reason: "missing_identifiers" }, { status: 400 });
+  const throttle = await rateLimit(request, "widget-config", 180, 60, shopSlug);
+  if (!throttle.allowed) return widgetJson(request, { available: false, reason: "rate_limited" }, { status: 429, headers: rateLimitHeaders(throttle.retryAfter) });
   const db = getDb();
   let [row] = await db.select({ shop: shops, product: products, model: productModels }).from(products).innerJoin(shops, eq(products.shopId, shops.id)).leftJoin(productModels, eq(productModels.productId, products.id)).where(and(eq(shops.slug, shopSlug), eq(products.sku, sku), eq(products.active, true))).limit(1);
   let requestedVariantId: string | undefined;
@@ -58,6 +61,8 @@ export async function POST(request: Request) {
   const shopSlug = typeof body?.shop === "string" ? body.shop.slice(0, 80) : "";
   const skus = [...new Set((Array.isArray(body?.skus) ? body.skus : []).filter(value => typeof value === "string").map(value => value.slice(0, 120)).filter(Boolean))].slice(0, 100);
   if (!shopSlug || !skus.length) return widgetJson(request, { error: "missing_identifiers" }, { status: 400 });
+  const throttle = await rateLimit(request, "widget-config-batch", 90, 60, shopSlug);
+  if (!throttle.allowed) return widgetJson(request, { error: "rate_limited" }, { status: 429, headers: rateLimitHeaders(throttle.retryAfter) });
   const db = getDb(); const [shop] = await db.select().from(shops).where(eq(shops.slug, shopSlug)).limit(1);
   if (!shop) return widgetJson(request, { error: "shop_not_found" }, { status: 404 });
   const allowed = JSON.parse(shop.allowedDomains || "[]") as string[];

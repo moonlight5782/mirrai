@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- full document navigation is intentional for the deployed vinext runtime */
 import { chatGPTSignInPath } from "../chatgpt-auth";
 
-type AdminSection = "Клиенты" | "Каталог" | "Аналитика" | "Установка" | "Подписка" | "Кабинет";
+type AdminSection = "Клиенты" | "Каталог" | "Аналитика" | "Установка" | "Подписка" | "Команда" | "Кабинет";
 
 const sections = [
   { label: "Клиенты", href: "/admin/clients", text: "Магазины, владельцы и состояние подключения" },

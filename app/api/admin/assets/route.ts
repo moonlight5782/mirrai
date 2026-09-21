@@ -4,6 +4,7 @@ import { getDb } from "../../../../db";
 import { authorizedShop } from "../../../../db/authorization";
 import { getUploadsBucket } from "../../../../db/storage";
 import { assets, productModels, products } from "../../../../db/schema";
+import { validateAssetHeader } from "../../../../lib/asset-validation";
 
 export async function POST(request: Request) {
   const user = await getChatGPTUser(); if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
@@ -13,11 +14,12 @@ export async function POST(request: Request) {
   const isImage = kind === "photo";
   const maxSize = isImage ? 12_000_000 : 50_000_000;
   if (!product || !(file instanceof File) || file.size < 100 || file.size > maxSize || !new Set(["glb", "usdz", "photo"]).has(kind)) return Response.json({ error: "invalid_asset" }, { status: 400 });
-  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const imageExtensions = new Set(["jpg", "jpeg", "png", "webp"]);
-  if ((!isImage && extension !== kind) || (isImage && (!imageExtensions.has(extension) || !/^image\/(jpeg|png|webp)$/i.test(file.type)))) return Response.json({ error: "extension_mismatch" }, { status: 400 });
-  const id = crypto.randomUUID(); const storageKey = `shops/${access.shop.id}/products/${product.id}/${id}.${extension}`; const contentType = isImage ? file.type.toLowerCase() : kind === "glb" ? "model/gltf-binary" : "model/vnd.usdz+zip";
-  await getUploadsBucket().put(storageKey, await file.arrayBuffer(), { httpMetadata: { contentType } });
+  const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const validation = validateAssetHeader(file, kind, header);
+  if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 });
+  const { extension, contentType } = validation;
+  const id = crypto.randomUUID(); const storageKey = `shops/${access.shop.id}/products/${product.id}/${id}.${extension}`;
+  await getUploadsBucket().put(storageKey, file.stream(), { httpMetadata: { contentType } });
   await getDb().insert(assets).values({ id, shopId: access.shop.id, productId: product.id, storageKey, fileName: file.name.slice(0, 240), contentType, sizeBytes: file.size, kind });
   const url = `/api/assets/${id}`;
   if (isImage) {
