@@ -125,6 +125,8 @@ test("embeddable SDK creates a product-aware accessible AR launcher", async () =
   assert.match(sdk, /100dvh/);
   assert.match(viewer, /camera-orbit": "35deg 68deg 120%"/);
   assert.match(viewer, /previewCameraRadius/);
+  assert.match(viewer, /furnitureRatio - 1\.4\) \* \.25/);
+  assert.match(viewer, /Math\.min\(260,/);
   assert.match(viewer, /ResizeObserver/);
   assert.doesNotMatch(viewer, /"disable-zoom": true/);
   assert.match(viewer, /масштабируйте двумя/);

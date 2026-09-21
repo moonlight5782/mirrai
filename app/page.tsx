@@ -60,8 +60,10 @@ function previewCameraRadius(value: Dimensions, viewportAspect: number) {
   const safeAspect = Math.max(.55, Math.min(1.8, viewportAspect || 1));
   const furnitureRatio = Math.max(value.width, value.depth) / Math.max(value.height, 1);
   const portraitFactor = safeAspect < 1 ? Math.min(1.55, 1 / safeAspect) : 1;
-  const wideFurnitureFactor = Math.min(1.3, 1 + Math.max(0, furnitureRatio - 1.55) * .08);
-  return Math.round(Math.max(120, Math.min(225, 120 * portraitFactor * wideFurnitureFactor)));
+  // Long tables and low sofas need substantially more horizontal framing than
+  // model-viewer's bounding-sphere default, especially in a portrait widget.
+  const wideFurnitureFactor = Math.min(1.75, 1 + Math.max(0, furnitureRatio - 1.4) * .25);
+  return Math.round(Math.max(120, Math.min(260, 120 * portraitFactor * wideFurnitureFactor)));
 }
 
 export default function Home() {
