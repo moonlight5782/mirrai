@@ -8,7 +8,7 @@ MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product fro
 - GLB preview plus WebXR, Android Scene Viewer, and iOS AR Quick Look launch;
 - per-product width, height, and depth with automatic 1:1 model scaling;
 - PBR preview lighting, exposure control, contact shadows, and native AR lighting adaptation;
-- direct-site upload of a product photo or GLB for testing;
+- local preview of a merchant-provided GLB; product photos are uploaded only through the protected merchant dashboard;
 - embeddable widget mode that receives the selected store product through URL parameters;
 - widget events for `model_ready`, `ar_open`, and `object_placed`;
 - subscription fallback state;
@@ -21,7 +21,7 @@ MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product fro
 - CSV catalog import with a downloadable template;
 - first-party GLB/USDZ uploads stored in R2;
 - 30-day AR funnel analytics per store and product;
-- SDK 1.0 batch configuration, one shared modal and dynamic-page observation;
+- versioned SDK 2.1.0 batch configuration, one shared modal and dynamic-page observation;
 - responsive Russian-language interface and Cloudflare-compatible Sites build.
 
 ## Development
@@ -60,11 +60,11 @@ Dimensions are centimeters. Remote assets must use HTTPS and allow cross-origin 
 
 `subscription=inactive` demonstrates the inactive-subscription fallback. Production entitlement must be issued and verified by the merchant backend; a URL parameter is not a security mechanism.
 
-The production-style SDK is available at `/mirrai-widget.js`. It can auto-mount from `data-*` attributes or be mounted on dynamic product pages:
+The versioned pilot SDK is available at `/mirrai-widget-2.1.0.js`; `/mirrai-widget.js` remains a compatibility alias for existing installations. It can auto-mount from `data-*` attributes or be mounted on dynamic product pages:
 
 ```html
 <div id="mirrai-slot"></div>
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget.js" data-auto="false"></script>
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.1.0.js" data-auto="false"></script>
 <script>
   MirraiWidget.mount({
     target: "#mirrai-slot",
@@ -90,9 +90,11 @@ The SDK requests `/api/widget/config`, and the button appears only when the subs
 For a full-store installation, add the script once and mark each product-card slot with its SKU. The SDK scans all matching slots automatically:
 
 ```html
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget.js" data-shop-id="nordform" data-auto="scan" defer></script>
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.1.0.js" data-shop-id="nordform" data-auto="scan" defer></script>
 <div data-mirrai-sku="CLOUD-001"></div>
 ```
+
+`data-mirrai-sku` is the preferred source of truth. If a product page has no SKU in structured data or HTML, but its URL reliably ends with the SKU, add `data-allow-url-sku="true"` to the script. URL guessing is disabled by default so the wrong model cannot be attached to a product.
 
 The SDK reports its first valid load to the setup wizard, so a store owner can verify installation without inspecting code.
 
@@ -117,16 +119,16 @@ The first merchant pilot is provisioned as `hugge-md`. MIRRAI imports furniture 
 For OpenCart product pages, the SDK can locate the UltraStore product code and insert its AR launcher without per-product markup:
 
 ```html
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget.js" data-shop-id="hugge-md" data-auto="product" data-sku-prefix="HUGGE-" defer></script>
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.1.0.js" data-shop-id="hugge-md" data-auto="product" data-sku-prefix="HUGGE-" defer></script>
 ```
 
 As of 28 August 2026, `hugge.md` serves an expired TLS certificate. The pilot remains marked `blocked` for automatic sync and installation until the merchant renews HTTPS; the already imported catalog is preserved.
 
 ## Self-hosted 3D generation
 
-The direct-site flow detects product images and GLB files automatically. GLB opens locally. A photo is submitted to a self-hosted Hunyuan3D 2.1 service and returns as a textured model.
+The public demo opens a ready GLB locally and never calls the GPU gateway from the browser. Merchant product photos are uploaded in `/admin/catalog`; MIRRAI then submits approved jobs from its server-side generation queue.
 
-Deployment files and GPU requirements are in [`services/reconstruction`](services/reconstruction/README.md). Configure `NEXT_PUBLIC_RECONSTRUCTION_API_URL` for direct uploads on the public demo, and the server-only `RECONSTRUCTION_API_URL` plus `RECONSTRUCTION_API_TOKEN` for merchant batch jobs.
+Deployment files and GPU requirements are in [`services/reconstruction`](services/reconstruction/README.md). Configure only the server-side `RECONSTRUCTION_API_URL` and `RECONSTRUCTION_API_TOKEN`; the token and gateway URL must never be exposed through a `NEXT_PUBLIC_*` variable.
 
 The admin catalog now has a durable batch queue. An operator selects products with source photos, queues them by priority and starts or polls processing. The Hugging Face adapter supports both Hunyuan3D's `generation_all` endpoint and Stable Fast 3D's lighter `run_button` endpoint. Generated GLB files are copied into the merchant's R2 storage and always enter `review`; they never become available in the widget until an operator checks scale and materials and explicitly publishes them. Failed jobs retry up to three times. Geometry-only output is rejected: a model can enter review only when the service returns a textured GLB.
 

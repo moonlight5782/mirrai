@@ -10,7 +10,7 @@
     if (!shopId) return;
     if (!window.__mirraiSdkLoading) {
       window.__mirraiSdkLoading = true;
-      var sdk = document.createElement('script'); sdk.src = runtime + '/mirrai-widget.js'; sdk.dataset.shopId = shopId; sdk.dataset.auto = 'scan'; sdk.defer = true; document.head.appendChild(sdk);
+      var sdk = document.createElement('script'); sdk.src = runtime + '/mirrai-widget-2.1.0.js'; sdk.dataset.shopId = shopId; sdk.dataset.auto = 'scan'; sdk.defer = true; document.head.appendChild(sdk);
     } else if (window.MirraiWidget) window.MirraiWidget.scan();
     document.addEventListener('variant:change', function (event) {
       var sku = event.detail && event.detail.variant && event.detail.variant.sku; var slot = document.getElementById('mirrai-slot-{{ block.id }}'); if (!sku || !slot) return; slot.innerHTML = ''; slot.dataset.mirraiSku = sku; slot.removeAttribute('data-mirrai-mounted'); if (window.MirraiWidget) window.MirraiWidget.scan();

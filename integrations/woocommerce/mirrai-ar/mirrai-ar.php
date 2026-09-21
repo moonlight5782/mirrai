@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MIRRAI AR for WooCommerce
  * Description: Adds the MIRRAI furniture AR button to WooCommerce product pages.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: MIRRAI
  */
 if (!defined('ABSPATH')) exit;
@@ -28,7 +28,7 @@ add_action('woocommerce_after_add_to_cart_form', 'mirrai_product_slot', 12);
 
 function mirrai_enqueue_sdk() {
   if (!is_product() || !get_option('mirrai_shop_id')) return; $runtime = trailingslashit(get_option('mirrai_runtime_url', 'https://mirrai-try-on.moonlight-5782.chatgpt.site'));
-  wp_enqueue_script('mirrai-ar', $runtime . 'mirrai-widget.js', [], '1.0.0', true);
+  wp_enqueue_script('mirrai-ar', $runtime . 'mirrai-widget-2.1.0.js', [], '2.1.0', true);
 }
 add_action('wp_enqueue_scripts', 'mirrai_enqueue_sdk');
 

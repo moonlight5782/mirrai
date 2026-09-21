@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import os
-import secrets
 import sqlite3
 import time
 import uuid
@@ -11,6 +10,7 @@ import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from gateway_auth import bearer_token_matches
 
 ROOT = Path(os.getenv("MIRRAI_DATA_DIR", "/data"))
 INPUTS, OUTPUTS = ROOT / "inputs", ROOT / "outputs"
@@ -47,8 +47,7 @@ def update_job(job_id: str, **values):
 
 
 def require_token(authorization: str | None = Header(default=None)):
-    expected = f"Bearer {API_TOKEN}"
-    if API_TOKEN and not secrets.compare_digest(authorization or "", expected):
+    if not bearer_token_matches(authorization, API_TOKEN):
         raise HTTPException(401, "Invalid API token")
 
 

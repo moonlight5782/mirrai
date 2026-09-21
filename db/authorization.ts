@@ -1,20 +1,14 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from ".";
 import { platformOperators, shopMembers, shops } from "./schema";
+import { hasRolePermission, membershipAllowsShop } from "./authorization-policy.mjs";
 
 export type Identity = { userId: string; email: string; emailVerified?: boolean };
 export type ShopRole = "owner" | "editor" | "analyst" | "operator";
 export type ShopPermission = "read" | "catalog:write" | "setup:write" | "members:write" | "generation:request";
 
-const permissions: Record<ShopRole, ReadonlySet<ShopPermission>> = {
-  owner: new Set(["read", "catalog:write", "setup:write", "members:write", "generation:request"]),
-  editor: new Set(["read", "catalog:write", "generation:request"]),
-  analyst: new Set(["read"]),
-  operator: new Set(["read", "catalog:write", "setup:write", "members:write", "generation:request"]),
-};
-
 export function hasShopPermission(role: string, permission: ShopPermission) {
-  return permissions[role as ShopRole]?.has(permission) === true;
+  return hasRolePermission(role, permission);
 }
 
 async function migrateLegacyOwner(identity: Identity) {
@@ -28,8 +22,8 @@ async function migrateLegacyOwner(identity: Identity) {
 export async function authorizedShop(identity: Identity, slug?: string | null, permission: ShopPermission = "read") {
   await migrateLegacyOwner(identity);
   const db = getDb();
-  const rows = await db.select({ shop: shops, role: shopMembers.role }).from(shopMembers).innerJoin(shops, eq(shopMembers.shopId, shops.id)).where(slug ? and(eq(shopMembers.userId, identity.userId), eq(shops.slug, slug)) : eq(shopMembers.userId, identity.userId)).limit(1);
-  if (rows[0]) return hasShopPermission(rows[0].role, permission) ? rows[0] : null;
+  const rows = await db.select({ shop: shops, role: shopMembers.role, membershipShopId: shopMembers.shopId }).from(shopMembers).innerJoin(shops, eq(shopMembers.shopId, shops.id)).where(slug ? and(eq(shopMembers.userId, identity.userId), eq(shops.slug, slug)) : eq(shopMembers.userId, identity.userId)).limit(1);
+  if (rows[0]) return membershipAllowsShop({ shopId: rows[0].membershipShopId, role: rows[0].role }, rows[0].shop.id, permission) ? { shop: rows[0].shop, role: rows[0].role } : null;
   if (slug && await isPlatformOperator(identity)) {
     const [shop] = await db.select().from(shops).where(eq(shops.slug, slug)).limit(1);
     if (shop) return { shop, role: "operator" as const };

@@ -22,4 +22,5 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: python -m unittest discover -s services/reconstruction -p "test_*.py"
       - run: npm test
