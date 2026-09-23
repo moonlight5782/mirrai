@@ -1,5 +1,7 @@
 # MIRRAI
 
+Подробная схема компонентов, потоков данных, установки виджета и границ готовности к production описана в [`docs/ARCHITECTURE_RU.md`](docs/ARCHITECTURE_RU.md).
+
 MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product from an online-store card and places it in their room at real scale without installing an app.
 
 ## Included

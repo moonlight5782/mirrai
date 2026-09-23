@@ -4,6 +4,7 @@ import { validateAssetHeader } from "../lib/asset-validation.ts";
 import { applyRateLimitPolicy } from "../lib/rate-limit-core.mjs";
 import { membershipAllowsShop } from "../db/authorization-policy.mjs";
 import { widgetDomainAllowed } from "../app/api/widget/cors.ts";
+import { installationIsConnected } from "../lib/installation-status.ts";
 
 function glbHeader(size, version = 2) {
   const bytes = new Uint8Array(16);
@@ -62,4 +63,11 @@ test("widget domain policy fails closed and allows only the API origin or config
   assert.equal(widgetDomainAllowed(new Request(api, { headers: { origin: "https://shop.example" } }), ["shop.example"]), true);
   assert.equal(widgetDomainAllowed(new Request(api, { headers: { origin: "https://attacker.example" } }), ["shop.example"]), false);
   assert.equal(widgetDomainAllowed(new Request(api, { headers: { origin: "https://mirrai.example" } }), []), true);
+});
+
+test("dashboard and setup share the server installation status", () => {
+  assert.equal(installationIsConnected("connected"), true);
+  assert.equal(installationIsConnected("active"), false);
+  assert.equal(installationIsConnected("waiting"), false);
+  assert.equal(installationIsConnected(undefined), false);
 });
