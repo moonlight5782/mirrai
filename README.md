@@ -23,7 +23,7 @@ MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product fro
 - CSV catalog import with a downloadable template;
 - first-party GLB/USDZ uploads stored in R2;
 - 30-day AR funnel analytics per store and product;
-- versioned SDK 2.1.0 batch configuration, one shared modal and dynamic-page observation;
+- versioned SDK 2.2.0 batch configuration, one shared modal and dynamic-page observation;
 - responsive Russian-language interface and Cloudflare-compatible Sites build.
 
 ## Development
@@ -62,11 +62,11 @@ Dimensions are centimeters. Remote assets must use HTTPS and allow cross-origin 
 
 `subscription=inactive` demonstrates the inactive-subscription fallback. Production entitlement must be issued and verified by the merchant backend; a URL parameter is not a security mechanism.
 
-The versioned pilot SDK is available at `/mirrai-widget-2.1.0.js`; `/mirrai-widget.js` remains a compatibility alias for existing installations. It can auto-mount from `data-*` attributes or be mounted on dynamic product pages:
+The versioned pilot SDK is available at `/mirrai-widget-2.2.0.js`; `/mirrai-widget.js` remains a compatibility alias for existing installations. It can auto-mount from `data-*` attributes or be mounted on dynamic product pages:
 
 ```html
 <div id="mirrai-slot"></div>
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.1.0.js" data-auto="false"></script>
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.2.0.js" data-auto="false"></script>
 <script>
   MirraiWidget.mount({
     target: "#mirrai-slot",
@@ -92,7 +92,7 @@ The SDK requests `/api/widget/config`, and the button appears only when the subs
 For a full-store installation, add the script once and mark each product-card slot with its SKU. The SDK scans all matching slots automatically:
 
 ```html
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.1.0.js" data-shop-id="nordform" data-auto="scan" defer></script>
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.2.0.js" data-shop-id="nordform" data-auto="scan" defer></script>
 <div data-mirrai-sku="CLOUD-001"></div>
 ```
 
@@ -121,7 +121,7 @@ The first merchant pilot is provisioned as `hugge-md`. MIRRAI imports furniture 
 For OpenCart product pages, the SDK can locate the UltraStore product code and insert its AR launcher without per-product markup:
 
 ```html
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.1.0.js" data-shop-id="hugge-md" data-auto="product" data-sku-prefix="HUGGE-" defer></script>
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.2.0.js" data-shop-id="hugge-md" data-auto="product" data-sku-prefix="HUGGE-" defer></script>
 ```
 
 As of 28 August 2026, `hugge.md` serves an expired TLS certificate. The pilot remains marked `blocked` for automatic sync and installation until the merchant renews HTTPS; the already imported catalog is preserved.

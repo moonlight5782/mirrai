@@ -17,23 +17,33 @@ export function SetupWizard({ displayName, shopSlug }: { displayName: string; sh
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
+    try {
     const response = await fetch(`/api/admin/setup${shopSlug ? `?shop=${encodeURIComponent(shopSlug)}` : ""}`, { cache: "no-store" });
     if (!response.ok) { setError("Не удалось загрузить настройку."); return; }
-    const next = await response.json() as SetupData; setData(next); setWebsiteUrl(next.shop.websiteUrl); setPlatform(next.shop.platform);
+    const next = await response.json() as SetupData; setData(next); setWebsiteUrl(next.shop.websiteUrl); setPlatform(next.shop.platform); setError("");
+    } catch { setError("Нет соединения. Повторите загрузку настройки."); }
   }, [shopSlug]);
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
 
-  const snippet = useMemo(() => data ? `<script src="${origin}/mirrai-widget-2.1.0.js" data-auto="universal" defer></script>` : "", [data, origin]);
+  const snippet = useMemo(() => data ? `<script src="${origin}/mirrai-widget-2.2.0.js" data-auto="universal" defer></script>` : "", [data, origin]);
   const connected = installationIsConnected(data?.shop.installationStatus);
   const settingsReady = Boolean(data?.shop.websiteUrl);
 
   async function save(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setError("");
+    try {
     const response = await fetch("/api/admin/setup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shop: data?.shop.slug, websiteUrl, platform }) });
-    if (!response.ok) setError("Проверьте адрес сайта и попробуйте ещё раз."); else await load();
-    setSaving(false);
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      setError(result.error === "domain_exists" ? "Этот домен уже связан с другим магазином. Обратитесь в поддержку." : "Проверьте адрес сайта и попробуйте ещё раз.");
+    } else await load();
+    } catch { setError("Нет соединения. Изменения не подтверждены — повторите попытку."); }
+    finally { setSaving(false); }
   }
-  async function copy(value: string, key: string) { await navigator.clipboard.writeText(value); setCopied(key); window.setTimeout(() => setCopied(""), 1800); }
+  async function copy(value: string, key: string) {
+    try { await navigator.clipboard.writeText(value); setCopied(key); window.setTimeout(() => setCopied(""), 1800); }
+    catch { setError("Браузер запретил копирование. Выделите код и скопируйте вручную."); }
+  }
 
   return <main className="admin-shell setup-shell">
     <AdminNavigation active="setup" displayName={displayName} shopSlug={shopSlug}/>
@@ -45,7 +55,7 @@ export function SetupWizard({ displayName, shopSlug }: { displayName: string; sh
 
       <section className={`setup-step ${settingsReady ? (data?.catalog.published ? "complete" : "active") : "locked"}`}><div className="step-number">2</div><div className="step-body"><header><div><h2>Проверьте каталог</h2><p>Кнопка появится только у товаров с опубликованной 3D-моделью.</p></div><b>{data?.catalog.published ? `${data.catalog.published} готовы ✓` : "Нужна модель"}</b></header><div className="catalog-check"><div><strong>{data?.catalog.published ?? 0}</strong><span>из {data?.catalog.total ?? 0} товаров доступны в AR</span></div><a href={`/admin/catalog?shop=${encodeURIComponent(data?.shop.slug ?? "")}`}>Открыть каталог моделей →</a></div></div></section>
 
-      <section className={`setup-step ${connected ? "complete" : settingsReady ? "active" : "locked"}`}><div className="step-number">3</div><div className="step-body"><header><div><h2>Установите одну вставку</h2><p>Её достаточно для всего магазина. Новые модели появятся автоматически.</p></div><b>{connected ? "Подключено ✓" : "Финальный шаг"}</b></header>{settingsReady && <><div className="install-choice"><button className="selected">Скопировать код</button><a href={`mailto:?subject=${encodeURIComponent("Установка MIRRAI для " + data?.shop.name)}&body=${encodeURIComponent("Добавьте этот код в общий шаблон сайта:\n\n" + snippet)}`}>Отправить разработчику</a></div><div className="code-box"><code>{snippet}</code><button onClick={() => void copy(snippet, "snippet")}>{copied === "snippet" ? "Скопировано ✓" : "Копировать"}</button></div><ol className="plain-steps"><li><b>Добавьте скрипт один раз</b><span>В общий шаблон сайта перед закрывающим тегом страницы.</span></li><li><b>Проверьте автоматическое распознавание</b><span>На стандартной теме коннектор сам найдёт платформу, SKU и место рядом с покупкой.</span></li><li><b>Откройте страницу товара</b><span>Мы проверим домен, товар и модель, а затем подтвердим подключение.</span></li></ol><details className="setup-advanced"><summary>Если тема магазина нестандартная или SKU не найден</summary><p>Добавьте контейнер <code>&lt;div data-mirrai-sku=&quot;SKU-ТОВАРА&quot;&gt;&lt;/div&gt;</code> в шаблон карточки товара. Это самый надёжный резервный режим: кнопка появится именно рядом с этим контейнером. <code>data-allow-url-sku=&quot;true&quot;</code> используйте только когда URL каждой карточки стабильно заканчивается артикулом.</p></details><div className={`connection-result ${connected ? "success" : ""}`}><i/><div><b>{connected ? "Всё работает" : "Ожидаем первое открытие"}</b><span>{connected && data?.shop.installationCheckedAt ? `Последняя проверка: ${new Date(data.shop.installationCheckedAt).toLocaleString("ru-RU")}` : "После установки откройте любой товар на своём сайте, затем обновите эту страницу."}</span></div><button onClick={() => void load()}>Проверить снова</button></div></>}</div></section>
+      <section className={`setup-step ${connected ? "complete" : settingsReady ? "active" : "locked"}`}><div className="step-number">3</div><div className="step-body"><header><div><h2>Установите одну вставку</h2><p>Её достаточно для всего магазина. Новые модели появятся автоматически.</p></div><b>{connected ? "Подключено ✓" : "Финальный шаг"}</b></header>{settingsReady && <><div className="install-choice"><button className="selected">Скопировать код</button><a href={`mailto:?subject=${encodeURIComponent("Установка MIRRAI для " + data?.shop.name)}&body=${encodeURIComponent("Добавьте этот код в общий шаблон сайта:\n\n" + snippet)}`}>Отправить разработчику</a></div><div className="code-box"><code>{snippet}</code><button onClick={() => void copy(snippet, "snippet")}>{copied === "snippet" ? "Скопировано ✓" : "Копировать"}</button></div><ol className="plain-steps"><li><b>Добавьте скрипт один раз</b><span>В общий шаблон сайта перед закрывающим тегом страницы.</span></li><li><b>Проверьте автоматическое распознавание</b><span>На стандартной теме коннектор сам найдёт платформу, SKU и место рядом с покупкой.</span></li><li><b>Откройте страницу товара</b><span>После загрузки скрипта появится отметка подключения. Затем откройте 3D и AR у товара с готовой моделью.</span></li></ol><details className="setup-advanced"><summary>Если тема магазина нестандартная или SKU не найден</summary><p>Добавьте контейнер <code>&lt;div data-mirrai-sku=&quot;SKU-ТОВАРА&quot;&gt;&lt;/div&gt;</code> в шаблон карточки товара. Это самый надёжный резервный режим: кнопка появится именно рядом с этим контейнером. <code>data-allow-url-sku=&quot;true&quot;</code> используйте только когда URL каждой карточки стабильно заканчивается артикулом.</p></details><div className={`connection-result ${connected ? "success" : ""}`}><i/><div><b>{connected ? "Скрипт обнаружен" : "Ожидаем первое открытие"}</b><span>{connected && data?.shop.installationCheckedAt ? `Последний сигнал скрипта: ${new Date(data.shop.installationCheckedAt).toLocaleString("ru-RU")}` : "После установки откройте любой товар на своём сайте, затем обновите эту страницу."}</span></div><button onClick={() => void load()}>Проверить снова</button></div></>}</div></section>
       {error && <p className="admin-error">{error}</p>}
     </section>
   </main>;

@@ -239,6 +239,13 @@
       "when": 1789988451300,
       "tag": "0033_flowery_carmella_unuscione",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1790141179174,
+      "tag": "0034_amazing_absorbing_man",
+      "breakpoints": true
     }
   ]
 }

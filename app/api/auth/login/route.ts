@@ -1,12 +1,17 @@
 import { eq } from "drizzle-orm";
-import { createSession, normalizeEmail, passwordMatches } from "../../../auth";
+import { createSession, passwordMatches } from "../../../auth";
 import { getDb } from "../../../../db";
 import { authLoginAttempts, authUsers } from "../../../../db/schema";
+import { credentialsInput } from "../../../../lib/auth-input.mjs";
+import { rateLimitPolicy, rateLimitHeaders } from "../../../../lib/rate-limit";
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({})) as { email?: string; password?: string };
-  const email = normalizeEmail(body.email ?? "");
-  const password = body.password ?? "";
+  if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
+  const throttle = await rateLimitPolicy(request, { scope: "login", ipLimit: 30, windowSeconds: 900 });
+  if (!throttle.allowed) return Response.json({ error: "rate_limited" }, { status: 429, headers: rateLimitHeaders(throttle.retryAfter) });
+  const input = credentialsInput(await request.json().catch(() => null));
+  if (!input) return Response.json({ error: "invalid_credentials" }, { status: 400 });
+  const { email, password } = input;
   const db = getDb();
   const now = Date.now();
   const [attempts] = await db.select().from(authLoginAttempts).where(eq(authLoginAttempts.email, email)).limit(1);

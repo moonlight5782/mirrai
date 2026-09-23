@@ -60,6 +60,15 @@ export const authSessions = sqliteTable("auth_sessions", {
   lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_auth_sessions_token_hash").on(table.tokenHash), index("idx_auth_sessions_user_expires").on(table.userId, table.expiresAt)]);
 
+export const authActionTokens = sqliteTable("auth_action_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  purpose: text("purpose").notNull(),
+  credentialVersion: text("credential_version").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  consumedBy: text("consumed_by"),
+}, table => [index("idx_auth_action_expiry").on(table.expiresAt)]);
+
 export const authLoginAttempts = sqliteTable("auth_login_attempts", {
   email: text("email").primaryKey(),
   attempts: integer("attempts").notNull().default(0),

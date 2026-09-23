@@ -43,7 +43,7 @@ flowchart LR
     publish --> db
     publish --> r2
 
-    store[Сайт магазина] --> sdk[mirrai-widget-2.1.0.js]
+    store[Сайт магазина] --> sdk[mirrai-widget-2.2.0.js]
     sdk --> bootstrap[/api/widget/bootstrap]
     bootstrap --> db
     sdk --> detect[Определение платформы и SKU]
@@ -68,7 +68,7 @@ flowchart LR
 Владелец открывает `/admin/setup`, указывает домен и платформу и получает:
 
 ```html
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.1.0.js"
+<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.2.0.js"
         data-auto="universal"
         defer></script>
 ```
@@ -260,7 +260,7 @@ erDiagram
 
 | Компонент | Отвечает за | Не отвечает за |
 |---|---|---|
-| `public/mirrai-widget-2.1.0.js` | поиск SKU, вставку кнопки, открытие viewer, отправку событий | право доступа и решение о публикации |
+| `public/mirrai-widget-2.2.0.js` | поиск SKU, вставку кнопки, открытие viewer, отправку событий | право доступа и решение о публикации |
 | `/api/widget/bootstrap` | поиск магазина по домену | поиск товара |
 | `/api/widget/config` | домен, подписка, SKU, вариант и published-модель | генерацию модели |
 | `/api/widget/events` | проверенную запись событий | биллинг |
@@ -293,7 +293,7 @@ SDK отправляет `widget_open`, `model_ready`, `ar_open`, `object_placed
 
 ## Что защищает от поломок сейчас
 
-- versioned SDK `2.1.0`; совместимый URL сохранён отдельно;
+- versioned SDK `2.2.0`; совместимый URL сохранён отдельно;
 - fail-closed доступ: сеть, подписка и домен не дают открыть старую модель;
 - IP-wide и per-shop rate limits;
 - проверка сигнатуры GLB, USDZ и изображений;
@@ -309,7 +309,7 @@ SDK отправляет `widget_open`, `model_ready`, `ar_open`, `object_placed
 Приоритет P0 до самостоятельных платных регистраций:
 
 1. Stripe/Paddle checkout, webhooks и идемпотентная таблица платежных событий.
-2. Email verification, password reset и уведомления о входе/окончании подписки.
+2. Подключить отправителя почты и проверить реальную доставку: email verification и password reset реализованы, но требуют `APP_ORIGIN`, `RESEND_API_KEY`, `MAIL_FROM`. Уведомления о входе/окончании подписки ещё не реализованы.
 3. Sentry или аналог для frontend/worker, uptime monitor и alert на очередь `failed`.
 4. Синтетический тест: bootstrap → config → GLB HEAD → viewer.
 5. E2E-матрица реальных тестовых магазинов по каждой поддерживаемой CMS.
@@ -328,7 +328,7 @@ SDK отправляет `widget_open`, `model_ready`, `ar_open`, `object_placed
 
 ## Где искать неисправность
 
-- Кнопка и распознавание страницы: `public/mirrai-widget-2.1.0.js`.
+- Кнопка и распознавание страницы: `public/mirrai-widget-2.2.0.js`.
 - Домен/CORS: `app/api/widget/cors.ts`, `bootstrap/route.ts`.
 - Товар/вариант/подписка: `app/api/widget/config/route.ts`.
 - Viewer и AR: `app/page.tsx`.

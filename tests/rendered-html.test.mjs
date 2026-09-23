@@ -234,7 +234,7 @@ test("commercial pilot architecture supports secure tenant roles, imports, R2 as
   ]);
   assert.match(schema, /shopMembers/); assert.match(schema, /shopInvites/); assert.match(schema, /platformOperators/); assert.match(schema, /export const assets/);
   assert.match(auth, /catalog:write/); assert.match(auth, /members:write/); assert.match(invitations, /acceptInvitation/); assert.match(invitations, /tokenHash/); assert.match(members, /invitationUrl/); assert.match(clients, /ownerEmail/); assert.match(importer, /parseCsv/); assert.match(upload, /getUploadsBucket/);
-  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "2\.1\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
+  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "2\.2\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
   assert.match(hosting, /"r2": "UPLOADS"/); assert.match(migration, /CREATE TABLE `assets`/);
 });
 

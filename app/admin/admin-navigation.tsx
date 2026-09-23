@@ -61,6 +61,7 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
       <b>МАГАЗИН</b>
       <a className={active === "subscription" ? "active" : ""} href={withShop("/admin/subscription", shopSlug)}>Подписка</a>
       <a href="/demo-store">Демонстрация ↗</a>
+      <a href="/account-access">Безопасность аккаунта</a>
     </nav>
     <div><small>{operator ? "Оператор MIRRAI" : "Владелец магазина"}</small><span>{displayName}</span><button type="button" className="admin-signout" onClick={() => void signOut()}>Выйти</button></div>
   </aside>;
