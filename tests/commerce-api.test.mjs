@@ -12,9 +12,9 @@ import * as provisioning from "../lib/provision-request.mjs";
 const require = createRequire(import.meta.url);
 function moduleFrom(path, resolve) {
   const source = ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const module = { exports: {} };
-  vm.runInNewContext(source, { module, exports: module.exports, require: resolve, Request, Response, URL, Date, console, crypto });
-  return module.exports;
+  const compiled = { exports: {} };
+  vm.runInNewContext(source, { module: compiled, exports: compiled.exports, require: resolve, Request, Response, URL, Date, console, crypto });
+  return compiled.exports;
 }
 function fixture(t) {
   const sqlite = new DatabaseSync(":memory:"); t.after(() => sqlite.close());
