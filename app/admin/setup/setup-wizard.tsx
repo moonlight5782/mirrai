@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminNavigation } from "../admin-navigation";
 import { installationIsConnected } from "../../../lib/installation-status";
 
-type SetupData = { shop: { slug: string; name: string; websiteUrl: string; platform: string; installationStatus: string; installationCheckedAt: string | null }; catalog: { total: number; published: number } };
+type SetupData = { shop: { slug: string; name: string; websiteUrl: string; platform: string; installationStatus: string; installationCheckedAt: string | null }; catalog: { total: number; published: number }; subscription: { allowed: boolean; expiresAt: string | null } };
 const platforms = [{ id: "shopify", name: "Shopify" }, { id: "woocommerce", name: "WooCommerce" }, { id: "opencart", name: "OpenCart" }, { id: "tilda", name: "Tilda" }, { id: "custom", name: "Свой сайт" }, { id: "other", name: "Другая платформа" }];
 
 export function SetupWizard({ displayName, shopSlug }: { displayName: string; shopSlug: string }) {
@@ -49,6 +49,13 @@ export function SetupWizard({ displayName, shopSlug }: { displayName: string; sh
     <AdminNavigation active="setup" displayName={displayName} shopSlug={shopSlug}/>
     <section className="admin-main">
       <header className="admin-head"><div><p>БЫСТРЫЙ СТАРТ / 3 ШАГА</p><h1>Подключение магазина</h1></div><a href="/demo-store">Посмотреть пример ↗</a></header>
+      {data && <section className="setup-intro" aria-label="Готовность магазина">
+        <div><b>Что нужно для работающей кнопки</b>
+          <p>Домен: {settingsReady ? "сохранён" : "укажите адрес сайта"}. Модели: {data.catalog.published ? `${data.catalog.published} доступны` : "нужно опубликовать хотя бы одну"}. Скрипт: {connected ? "обнаружен" : "ещё не обнаружен"}.</p>
+          <p>Доступ: {data.subscription.allowed ? "активен" : "неактивен — кнопка не откроет модель"}{data.subscription.expiresAt ? ` до ${new Date(data.subscription.expiresAt).toLocaleString("ru-RU")}` : ""}. <a href={`/admin/subscription?shop=${encodeURIComponent(data.shop.slug)}`}>Проверить подписку →</a></p>
+          <p>Последний шаг: откройте товар на сайте магазина, запустите 3D и AR, затем проверьте событие в <a href={`/admin/analytics?shop=${encodeURIComponent(data.shop.slug)}`}>статистике</a>. Сигнал скрипта не подтверждает качество модели или работу камеры.</p>
+        </div>
+      </section>}
       <div className="setup-intro"><div><b>Один универсальный коннектор</b><p>MIRRAI определит магазин по домену, распознает платформу, найдёт SKU и добавит кнопку только к товарам с готовой моделью. Для нестандартной темы можно явно передать SKU.</p></div><span>{connected ? "Виджет подключён" : "Обычно занимает 10 минут"}</span></div>
 
       <section className={`setup-step ${settingsReady ? "complete" : "active"}`}><div className="step-number">1</div><div className="step-body"><header><div><h2>Расскажите о магазине</h2><p>Адрес нужен, чтобы виджет работал только на вашем сайте.</p></div><b>{settingsReady ? "Готово ✓" : "Сейчас"}</b></header><form className="setup-form" onSubmit={save}><label>Адрес сайта<input type="url" required placeholder="https://my-store.com" value={websiteUrl} onChange={event => setWebsiteUrl(event.target.value)}/></label><fieldset><legend>На чём работает сайт?</legend><div className="platform-grid">{platforms.map(item => <label className={platform === item.id ? "selected" : ""} key={item.id}><input type="radio" name="platform" value={item.id} checked={platform === item.id} onChange={() => setPlatform(item.id)}/><span>{item.name}</span></label>)}</div></fieldset><button disabled={saving}>{saving ? "Сохраняем…" : settingsReady ? "Сохранить изменения" : "Продолжить"}</button></form></div></section>
