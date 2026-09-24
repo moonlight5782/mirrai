@@ -12,5 +12,7 @@ export async function GET() {
   const memberships = await db.select({ name: shops.name, slug: shops.slug, role: shopMembers.role })
     .from(shopMembers).innerJoin(shops, eq(shopMembers.shopId, shops.id))
     .where(eq(shopMembers.userId, user.userId)).orderBy(shops.createdAt);
-  return Response.json({ user: { displayName: user.displayName, email: user.email }, operator: await isPlatformOperator(user), shops: memberships });
+  const operator = await isPlatformOperator(user);
+  const visible = operator ? (await db.select({ name: shops.name, slug: shops.slug }).from(shops).orderBy(shops.createdAt)).map(shop => ({ ...shop, role: "operator" })) : memberships;
+  return Response.json({ user: { displayName: user.displayName, email: user.email }, operator, shops: visible }, { headers: { "Cache-Control": "no-store" } });
 }

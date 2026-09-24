@@ -18,7 +18,9 @@ export async function GET(request: Request) {
   const db = getDb();
   const rows = await db.select({ id: products.id, active: products.active, status: productModels.status, glbUrl: productModels.glbUrl }).from(products).leftJoin(productModels, eq(productModels.productId, products.id)).where(eq(products.shopId, shop.id));
   const variants = await db.select({ productId: productVariants.productId, active: productVariants.active, status: productVariants.modelStatus, glbUrl: productVariants.glbUrl }).from(productVariants).innerJoin(products, eq(productVariants.productId, products.id)).where(eq(products.shopId, shop.id));
-  return Response.json({ shop: { slug: shop.slug, name: shop.name, websiteUrl: shop.websiteUrl ?? "", platform: shop.platform, installationStatus: shop.installationStatus, installationCheckedAt: shop.installationCheckedAt }, catalog: catalogReadiness(rows, variants), subscription: subscriptionAccess(shop) }, { headers: { "Cache-Control": "no-store" } });
+  let allowedDomains: string[] = [];
+  try { const parsed = JSON.parse(shop.allowedDomains || "[]"); if (Array.isArray(parsed)) allowedDomains = parsed.filter(value => typeof value === "string"); } catch { /* legacy malformed value */ }
+  return Response.json({ shop: { slug: shop.slug, name: shop.name, websiteUrl: shop.websiteUrl ?? "", allowedDomains, platform: shop.platform, installationStatus: shop.installationStatus, installationCheckedAt: shop.installationCheckedAt }, catalog: catalogReadiness(rows, variants), subscription: subscriptionAccess(shop) }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {

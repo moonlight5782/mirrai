@@ -193,3 +193,29 @@ export const widgetEvents = sqliteTable("widget_events", {
   event: text("event").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [index("idx_widget_events_shop_created").on(table.shopId, table.createdAt)]);
+
+export const commercePricing = sqliteTable("commerce_pricing", {
+  id: integer("id").primaryKey(),
+  monthlyMinor: integer("monthly_minor"),
+  suppliedModelMinor: integer("supplied_model_minor"),
+  generatedModelMinor: integer("generated_model_minor"),
+  revision: integer("revision").notNull().default(1),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const merchantRequests = sqliteTable("merchant_requests", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => authUsers.id),
+  shopId: integer("shop_id").references(() => shops.id),
+  shopName: text("shop_name").notNull(),
+  websiteUrl: text("website_url").notNull(),
+  suppliedCount: integer("supplied_count").notNull(),
+  generatedCount: integer("generated_count").notNull(),
+  quoteJson: text("quote_json").notNull(),
+  status: text("status").notNull().default("pending"),
+  operatorNote: text("operator_note").notNull().default(""),
+  updatedBy: text("updated_by"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [index("idx_merchant_requests_user_created").on(table.userId, table.createdAt), index("idx_merchant_requests_status").on(table.status)]);

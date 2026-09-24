@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 
-type AdminSection = "overview" | "clients" | "catalog" | "setup" | "analytics" | "team" | "subscription";
+type AdminSection = "overview" | "clients" | "catalog" | "setup" | "analytics" | "team" | "subscription" | "billing";
 type ShopOption = { name: string; slug: string; role: string };
 
 function withShop(path: string, shopSlug: string) {
@@ -31,6 +31,7 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
       analytics: "/admin/analytics",
       team: "/admin/team",
       subscription: "/admin/subscription",
+      billing: "/admin/billing",
     };
     const section = active === "clients" ? "catalog" : active;
     window.location.assign(withShop(paths[section], nextShop));
@@ -60,8 +61,10 @@ export function AdminNavigation({ active, displayName, shopSlug = "" }: { active
       {(operator || shops.find(shop => shop.slug === shopSlug)?.role === "owner") && <a className={active === "team" ? "active" : ""} href={withShop("/admin/team", shopSlug)}>Команда и доступ</a>}
       <b>МАГАЗИН</b>
       <a className={active === "subscription" ? "active" : ""} href={withShop("/admin/subscription", shopSlug)}>Подписка</a>
+      <a className={active === "billing" ? "active" : ""} href="/admin/billing">{operator ? "Тарифы и заявки" : "Заявки и расчёт"}</a>
       <a href="/demo-store">Демонстрация ↗</a>
       <a href="/account-access">Безопасность аккаунта</a>
+      <button type="button" className="admin-signout" onClick={() => void signOut()}>Выйти</button>
     </nav>
     <div><small>{operator ? "Оператор MIRRAI" : "Владелец магазина"}</small><span>{displayName}</span><button type="button" className="admin-signout" onClick={() => void signOut()}>Выйти</button></div>
   </aside>;
