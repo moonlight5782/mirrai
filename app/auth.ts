@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { and, eq, gt } from "drizzle-orm";
+import { derivePasswordHash } from "../lib/password-hash.mjs";
 
 const SESSION_COOKIE = "mirrai_session";
 const SESSION_DAYS = 30;
@@ -40,9 +41,7 @@ export async function sha256(value: string) {
 }
 
 async function derivePassword(password: string, salt: Uint8Array, iterations = PASSWORD_ITERATIONS) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new Uint8Array(salt), iterations }, key, 256);
-  return bytesToBase64(new Uint8Array(bits));
+  return derivePasswordHash(password, salt, iterations);
 }
 
 function constantTimeEqual(left: string, right: string) {

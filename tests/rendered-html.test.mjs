@@ -160,7 +160,8 @@ test("merchant accounts use durable password sessions instead of ChatGPT identit
   assert.match(schema, /authUsers/);
   assert.match(schema, /authSessions/);
   assert.match(schema, /authLoginAttempts/);
-  assert.match(auth, /PBKDF2/);
+  // Algorithm compatibility is exercised in password-runtime.test.mjs on workerd.
+  assert.match(auth, /derivePasswordHash/);
   assert.match(auth, /httpOnly: true/);
   assert.match(login, /temporarily_blocked/);
   assert.match(register, /createSession/);

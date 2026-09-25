@@ -51,6 +51,11 @@ export const authUsers = sqliteTable("auth_users", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("idx_auth_users_email").on(table.email)]);
 
+export const authGoogleAccounts = sqliteTable("auth_google_accounts", {
+  subject: text("subject").primaryKey(),
+  userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+}, table => [uniqueIndex("idx_google_user").on(table.userId)]);
+
 export const authSessions = sqliteTable("auth_sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),

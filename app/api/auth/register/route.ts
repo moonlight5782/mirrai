@@ -9,7 +9,8 @@ import { mailConfiguration, sendAccountAction } from "../../../../lib/account-ma
 export async function POST(request: Request) {
   if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
   const input = credentialsInput(await request.json().catch(() => null), true);
-  if (!input || !validPassword(input.password)) return Response.json({ error: "invalid_credentials" }, { status: 400 });
+  if (!input) return Response.json({ error: "invalid_fields" }, { status: 400 });
+  if (!validPassword(input.password)) return Response.json({ error: "invalid_password" }, { status: 400 });
   const { email, password, displayName } = input;
   const throttle = await rateLimitPolicy(request, { scope: "register", ipLimit: 8, subjectLimit: 4, windowSeconds: 60 * 60, subject: email, subjectMode: "subject" });
   if (!throttle.allowed) return Response.json({ error: "rate_limited" }, { status: 429, headers: rateLimitHeaders(throttle.retryAfter) });

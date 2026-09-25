@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser, safeReturnTo } from "../auth";
 import { AuthForm } from "../login/auth-form";
+import { googleConfiguration } from "../../lib/google-auth";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Регистрация — MIRRAI", robots: { index: false, follow: false } };
@@ -13,5 +14,5 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   const invite = Array.isArray(params.invite) ? params.invite[0] : params.invite;
   const returnTo = safeReturnTo(raw, "/onboarding");
   if (await getCurrentUser()) redirect(returnTo);
-  return <main className="merchant-auth"><a className="brand" href="/">MIRR<span>AI</span></a><section><div><p>ПЕРВЫЙ ШАГ</p><h1>Создайте кабинет</h1><span>{invite ? "Создайте аккаунт с почтой, указанной в приглашении." : "После регистрации добавьте магазин, загрузите каталог и получите код виджета."}</span></div><AuthForm mode="register" returnTo={returnTo}/><footer>Уже есть аккаунт? <a href={`/login?returnTo=${encodeURIComponent(returnTo)}`}>Войти</a></footer></section></main>;
+  return <main className="merchant-auth"><a className="brand" href="/">MIRR<span>AI</span></a><section><div><p>ПЕРВЫЙ ШАГ</p><h1>Создайте кабинет</h1><span>{invite ? "Создайте аккаунт с почтой, указанной в приглашении." : "После регистрации добавьте магазин, загрузите каталог и получите код виджета."}</span></div><AuthForm mode="register" returnTo={returnTo} googleEnabled={Boolean(googleConfiguration())}/><footer>Уже есть аккаунт? <a href={`/login?returnTo=${encodeURIComponent(returnTo)}`}>Войти</a></footer></section></main>;
 }

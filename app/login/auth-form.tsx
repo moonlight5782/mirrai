@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function AuthForm({ mode, returnTo }: { mode: "login" | "register"; returnTo: string }) {
+export function AuthForm({ mode, returnTo, googleEnabled = false, oauthError }: { mode: "login" | "register"; returnTo: string; googleEnabled?: boolean; oauthError?: string }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [registered, setRegistered] = useState<{ verificationEmailSent: boolean } | null>(null);
@@ -17,7 +17,7 @@ export function AuthForm({ mode, returnTo }: { mode: "login" | "register"; retur
       else window.location.assign(returnTo);
       return;
     }
-    setError(result.error === "email_exists" ? "Аккаунт с такой почтой уже существует." : ["temporarily_blocked", "rate_limited"].includes(result.error) ? "Слишком много попыток. Повторите позже." : mode === "login" ? "Неверная почта или пароль." : "Проверьте поля. Пароль должен содержать минимум 10 символов, буквы и цифры.");
+    setError(response.status >= 500 ? "Ошибка сервера. Попробуйте позже — менять пароль из-за этой ошибки не нужно." : result.error === "email_exists" ? "Аккаунт с такой почтой уже существует." : ["temporarily_blocked", "rate_limited"].includes(result.error) ? "Слишком много попыток. Повторите позже." : result.error === "invalid_password" ? "Пароль: от 10 до 128 символов, хотя бы одна буква и одна цифра." : mode === "login" ? "Неверная почта или пароль." : "Проверьте имя и адрес электронной почты.");
     } catch { setError("Нет соединения. Проверьте интернет и повторите попытку."); }
     finally { setSaving(false); }
   }
@@ -26,9 +26,12 @@ export function AuthForm({ mode, returnTo }: { mode: "login" | "register"; retur
     <a href={returnTo}>Продолжить настройку магазина →</a>
   </div>;
   return <form className="merchant-auth-form" onSubmit={submit}>
+    {googleEnabled && <a href={`/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`}>Продолжить с Google</a>}
+    {oauthError && <p role="alert">{oauthError === "email_exists" ? "С этой почтой уже есть аккаунт. Войдите по паролю. Автоматическое объединение аккаунтов отключено для безопасности." : "Не удалось войти через Google. Попробуйте ещё раз или используйте почту и пароль."}</p>}
     {mode === "register" && <label>Ваше имя<input name="name" required autoComplete="name" maxLength={100} placeholder="Артур"/></label>}
     <label>Рабочая почта<input name="email" type="email" required maxLength={254} autoComplete="email" placeholder="owner@store.md"/></label>
     <label>Пароль<input name="password" type="password" required minLength={10} maxLength={128} autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="Не менее 10 символов"/></label>
+    {mode === "register" && <p>От 10 до 128 символов, хотя бы одна буква и одна цифра.</p>}
     {mode === "login" && <a href="/account-access">Забыли пароль?</a>}
     {error && <p className="auth-error" role="alert">{error}</p>}
     <button disabled={saving}>{saving ? "Подождите…" : mode === "login" ? "Войти в кабинет" : "Создать аккаунт"}<span>→</span></button>
