@@ -25,7 +25,7 @@ export function SetupWizard({ displayName, shopSlug }: { displayName: string; sh
   }, [shopSlug]);
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
 
-  const snippet = useMemo(() => data ? `<script src="${origin}/mirrai-widget-2.2.0.js" data-auto="universal" defer></script>` : "", [data, origin]);
+  const snippet = useMemo(() => data ? `<script src="${origin}/mirrai-widget-2.3.0.js" data-auto="universal" defer></script>` : "", [data, origin]);
   const connected = installationIsConnected(data?.shop.installationStatus);
   const settingsReady = Boolean(data?.shop.websiteUrl);
 

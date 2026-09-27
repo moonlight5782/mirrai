@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-html-link-for-pages -- viewer exit intentionally performs a full navigation */
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { arPlatform } from "../lib/ar-platform.mjs";
 
 type View = "landing" | "viewer";
 type UploadState = "idle" | "ready" | "error";
@@ -14,6 +15,7 @@ type ModelViewerElement = HTMLElement & {
   updateFraming?: () => Promise<void>;
   jumpCameraToGoal?: () => void;
   loaded?: boolean;
+  canActivateAR?: boolean;
 };
 
 const products: Product[] = [
@@ -78,11 +80,31 @@ export default function Home() {
   const [uploadMessage, setUploadMessage] = useState("");
   const [exposure, setExposure] = useState(1);
   const [scaleState, setScaleState] = useState<ScaleState>("checking");
+  const [launcher, setLauncher] = useState(false);
+  const [arHelp, setArHelp] = useState(false);
+  const [accessReady, setAccessReady] = useState(false);
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [platform, setPlatform] = useState(() => arPlatform());
+  const [phoneLink, setPhoneLink] = useState("");
+  const [qrCode, setQrCode] = useState("");
+  const [linkNotice, setLinkNotice] = useState("");
+  const accessUntil = useRef(0);
   const arRef = useRef<ModelViewerElement>(null);
+
+  const catalog = useMemo(() => widgetProduct ? [widgetProduct] : products, [widgetProduct]);
+  const selected = catalog[Math.min(active, catalog.length - 1)] ?? products[0];
+  const selectedVariants = selected.variants ?? [];
+  const selectedVariant = selectedVariants.find(variant => variant.id === activeVariantId && variant.available) ?? selectedVariants.find(variant => variant.id === selected.selectedVariantId && variant.available) ?? selectedVariants.find(variant => variant.default && variant.available) ?? selectedVariants.find(variant => variant.available);
+  const selectedDimensions = customName ? customDimensions : selected.dimensions;
+  const modelSource = customModel || selectedVariant?.model || selected.model;
+  const selectedColor = selectedVariant?.color || selected.color;
+  const selectedMaterial = selectedVariant?.material || selected.material;
 
   useEffect(() => {
     import("@google/model-viewer");
     const params = new URLSearchParams(window.location.search);
+    setPlatform(arPlatform(navigator.userAgent, navigator.maxTouchPoints));
+    setLauncher(params.get("launcher") === "1");
     if (params.get("widget") !== "1") {
       const openFromUrl = () => {
         const productId = new URLSearchParams(window.location.search).get("product");
@@ -125,14 +147,56 @@ export default function Home() {
     });
   }, []);
 
-  const catalog = useMemo(() => widgetProduct ? [widgetProduct] : products, [widgetProduct]);
-  const selected = catalog[Math.min(active, catalog.length - 1)] ?? products[0];
-  const selectedVariants = selected.variants ?? [];
-  const selectedVariant = selectedVariants.find(variant => variant.id === activeVariantId && variant.available) ?? selectedVariants.find(variant => variant.id === selected.selectedVariantId && variant.available) ?? selectedVariants.find(variant => variant.default && variant.available) ?? selectedVariants.find(variant => variant.available);
-  const selectedDimensions = customName ? customDimensions : selected.dimensions;
-  const modelSource = customModel || selectedVariant?.model || selected.model;
-  const selectedColor = selectedVariant?.color || selected.color;
-  const selectedMaterial = selectedVariant?.material || selected.material;
+  useEffect(() => {
+    if (view !== "viewer") return;
+    const shareUrl = new URL(window.location.href);
+    for (const key of ["launcher", "parentOrigin", "variants", "selectedVariantId"]) shareUrl.searchParams.delete(key);
+    if (isWidget) {
+      shareUrl.searchParams.set("model", modelSource);
+      shareUrl.searchParams.set("material", selectedMaterial);
+      shareUrl.searchParams.set("color", selectedColor);
+    }
+    setPhoneLink(shareUrl.href);
+  }, [view, isWidget, modelSource, selectedMaterial, selectedColor, selected.id]);
+
+  useEffect(() => {
+    if (!phoneLink || platform.mobile) return;
+    let cancelled = false;
+    import("qrcode").then(module => module.toDataURL(phoneLink, { width: 220, margin: 2 })).then(value => { if (!cancelled) setQrCode(value); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [phoneLink, platform.mobile]);
+
+  useEffect(() => {
+    if (!launcher) return;
+    const params = new URLSearchParams(window.location.search);
+    const shop = params.get("shop"), sku = params.get("sku");
+    let cancelled = false;
+    const check = async () => {
+      try {
+        if (!shop || !sku) throw new Error("missing_shop");
+        const response = await fetch(`/api/widget/config?${new URLSearchParams({ shop, sku })}`, { cache: "no-store" });
+        const result = await response.json();
+        if (cancelled) return;
+        const sameModel = result.available === true && new URL(result.model, location.origin).href === new URL(modelSource, location.origin).href;
+        accessUntil.current = sameModel && response.ok ? Date.now() + 35000 : 0;
+        setAccessReady(accessUntil.current > 0);
+        setAccessChecked(true);
+      } catch { if (!cancelled) { accessUntil.current = 0; setAccessReady(false); setAccessChecked(true); } }
+    };
+    void check();
+    const timer = setInterval(check, 30000);
+    window.addEventListener("focus", check);
+    return () => { cancelled = true; clearInterval(timer); window.removeEventListener("focus", check); };
+  }, [launcher, modelSource]);
+
+  useEffect(() => {
+    if (!launcher || view !== "viewer") return;
+    const root = document.querySelector(".ar-launcher");
+    if (!root) return;
+    const observer = new ResizeObserver(() => window.parent.postMessage({ source: "mirrai-widget", event: "launcher_resize", height: Math.ceil(root.getBoundingClientRect().height) + 8 }, targetOrigin));
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [launcher, view, targetOrigin]);
 
   function emitWidgetEvent(event: string) {
     if (!isWidget || window.parent === window) return;
@@ -191,6 +255,9 @@ export default function Home() {
       }
       const clamp = (value: number) => Math.max(.01, Math.min(100, value));
       const scale = [clamp(target.x / source.x), clamp(target.y / source.y), clamp(target.z / source.z)];
+      // Scene Viewer re-fetches the source GLB and ignores runtime scale.
+      const bakedSize = (["x", "y", "z"] as const).every(axis => Math.abs(source[axis] - target[axis]) <= Math.max(.005, target[axis] * .005));
+      viewer.setAttribute("ar-modes", bakedSize ? "webxr scene-viewer quick-look" : "webxr quick-look");
       viewer.setAttribute("scale", scale.map(value => value.toFixed(7)).join(" "));
       await viewer.updateFraming?.();
       fitPreviewCamera();
@@ -207,7 +274,7 @@ export default function Home() {
     const onArStatus = (event: Event) => {
       const status = (event as CustomEvent<{ status: string }>).detail?.status;
       if (status === "object-placed") { setArStatus("Предмет размещён в вашем пространстве"); if (isWidget && window.parent !== window) window.parent.postMessage({ source: "mirrai-widget", event: "object_placed", productId: selected.id, at: new Date().toISOString() }, targetOrigin); }
-      else if (status === "failed") setArStatus("AR не запустился — откройте страницу в Safari на iPhone или Chrome на Android");
+      else if (status === "failed") { setArHelp(true); setArStatus("Не удалось открыть камеру в этом браузере."); }
       else setArStatus("Медленно направляйте камеру на свободный участок пола…");
     };
     viewer.addEventListener("load", onLoad); viewer.addEventListener("error", onError); viewer.addEventListener("ar-status", onArStatus);
@@ -218,9 +285,16 @@ export default function Home() {
   }, [view, modelSource, selected.id, selected.name, selectedVariant?.id, selectedVariant?.colorName, selectedVariant?.sku, selectedDimensions, customName, isWidget, targetOrigin]);
 
   async function openAR() {
+    if (launcher && (!accessReady || Date.now() > accessUntil.current)) { setAccessReady(false); setArStatus("Проверяем доступность товара. Попробуйте через несколько секунд."); return; }
     if (scaleState !== "verified") { setArStatus(scaleState === "error" ? "AR заблокирован: модель не прошла проверку размеров." : "Дождитесь проверки масштаба 1:1."); return; }
+    if (!arRef.current?.canActivateAR) { setArHelp(true); return; }
     emitWidgetEvent("ar_open"); setArStatus("Запускаем камеру и поиск поверхности…");
-    try { await arRef.current?.activateAR?.(); } catch { setArStatus("AR недоступен в этом браузере. Используйте Safari на iPhone или Chrome на Android."); }
+    try { await arRef.current?.activateAR?.(); } catch { setArHelp(true); setArStatus("Камера не открылась. 3D-просмотр остаётся доступен."); }
+  }
+
+  async function copyPhoneLink() {
+    try { await navigator.clipboard.writeText(phoneLink); setLinkNotice(`Ссылка скопирована. Вставьте её в ${platform.browser}.`); }
+    catch { setLinkNotice("Нажмите и удерживайте ссылку, чтобы скопировать её."); }
   }
 
   async function handleAsset(file?: File) {
@@ -234,6 +308,14 @@ export default function Home() {
   }
 
   if (isWidget && !subscriptionActive) return <main className="widget-fallback"><div><span>MIRRAI</span><p>Вы прекрасно выглядите в любой одежде.<br/>А ваша мебель — в любом интерьере.</p></div></main>;
+
+  if (view === "viewer" && launcher) return <main className="ar-launcher">
+    {React.createElement("model-viewer", { key: modelSource, ref: arRef, src: modelSource, alt: selected.name, ar: true, loading: "eager", reveal: "auto", "ar-modes": "webxr scene-viewer quick-look", "ar-scale": "fixed", "ar-placement": "floor", "ar-usdz-max-texture-size": "2048", className: "ar-preload-model", "aria-hidden": "true" }, React.createElement("span", { slot: "ar-button" }))}
+    <button className="ar-launch-button" onClick={openAR} disabled={scaleState !== "verified" || !accessReady}>{scaleState === "error" ? "Не удалось загрузить модель" : accessChecked && !accessReady ? "Примерка временно недоступна" : scaleState !== "verified" ? "Готовим просмотр…" : !accessReady ? "Проверяем доступность…" : "Посмотреть у себя"}<span aria-hidden="true">↗</span></button>
+    <p className="ar-launch-note" role="status">{arHelp ? "Этот браузер не открыл камеру." : "Наведите камеру на пол · размер 1:1"}</p>
+    {arHelp && <div className="ar-browser-help"><p>В меню приложения выберите «Открыть в {platform.browser}». Если такого пункта нет, скопируйте ссылку.</p><button onClick={copyPhoneLink}>Скопировать ссылку</button>{linkNotice && <p role="status">{linkNotice}</p>}</div>}
+    <a href={phoneLink} target="_top">{scaleState === "error" ? "Открыть просмотр и повторить" : "Посмотреть в 3D"}</a>
+  </main>;
 
   if (view === "viewer") return <main className={isWidget ? "widget-shell" : ""}>
     {!isWidget && <nav className="nav shell"><a className="brand" href="/">MIRR<span>AI</span></a><div className="nav-links"><a href="/#catalog">Каталог</a><a href="/#business">Для магазинов</a></div><button className="nav-cta" onClick={closeViewer}>На главную <span>↗</span></button></nav>}
@@ -252,7 +334,7 @@ export default function Home() {
           <div><p className="control-label">Габариты · Ш × Г × В</p><strong className="dimensions">{dimensionsLabel(selectedDimensions)}</strong><p className="hint">Модель зафиксирована в указанном масштабе. Покупатель не может случайно изменить размер в AR.</p></div>
           <div><p className="control-label">Освещение превью</p><div className="range-row"><input aria-label="Экспозиция 3D-превью" type="range" min="0.65" max="1.35" step="0.05" value={exposure} onChange={event => setExposure(Number(event.target.value))}/><span>{Math.round(exposure * 100)}%</span></div><p className="hint">В системном AR свет и цвет адаптируются камерой устройства автоматически.</p></div>
           {!isWidget && <div className="asset-upload"><p className="control-label">Локальная проверка готовой модели</p><div className="dimension-inputs">{(["width", "depth", "height"] as const).map((key, index) => <label key={key}><span>{["Ш", "Г", "В"][index]}, см</span><input type="number" min="1" max="5000" value={customDimensions[key]} onChange={event => setCustomDimensions(current => ({ ...current, [key]: positiveNumber(event.target.value, current[key]) }))}/></label>)}</div><label className="upload-button"><input type="file" accept=".glb,model/gltf-binary" onChange={event => handleAsset(event.target.files?.[0])}/><span>＋</span><b>Выбрать готовый GLB</b></label>{uploadState !== "idle" && <div className={`asset-result ${uploadState}`}><span>{uploadState === "ready" ? "✓" : "!"}</span><div><strong>{customName}</strong><small>{uploadMessage}</small></div></div>}<p className="hint">Фотографии товаров загружаются в кабинете магазина, где MIRRAI безопасно отправляет их в очередь генерации.</p></div>}
-          <div className="ar-state"><i/><p>{arStatus}</p></div><button className="primary" onClick={openAR} disabled={scaleState !== "verified"}>{scaleState === "verified" ? "Посмотреть у себя" : scaleState === "error" ? "Проверьте размеры модели" : "Проверяем масштаб 1:1"}<span>↗</span></button><p className="privacy">Камера открывается системным AR устройства. ARKit может показывать немного более узкий кадр, чем приложение «Камера», но это не изменяет физический масштаб модели. MIRRAI не сохраняет изображение комнаты.</p>
+          <div className="ar-state" role="status"><i/><p>{arStatus}</p></div>{platform.mobile ? <button className="primary" onClick={openAR} disabled={scaleState !== "verified"}>{scaleState === "verified" ? "Посмотреть у себя" : scaleState === "error" ? "Модель временно недоступна" : "Готовим просмотр…"}<span>↗</span></button> : <div className="ar-phone-handoff"><strong>Посмотрите у себя с телефона</strong><p>Наведите камеру телефона на QR-код и откройте ссылку.</p>{qrCode && <img src={qrCode} width="220" height="220" alt="QR-код для открытия этого товара на телефоне"/>}<button onClick={copyPhoneLink}>Скопировать ссылку</button>{linkNotice && <p role="status">{linkNotice}</p>}</div>}{arHelp && <div className="ar-browser-help"><strong>Откройте в {platform.browser}</strong><p>В меню приложения выберите «Открыть в браузере» или скопируйте ссылку. Если телефон не поддерживает AR, вы можете продолжить вращать модель здесь.</p><button onClick={copyPhoneLink}>Скопировать ссылку</button><a href={phoneLink} target="_blank" rel="noopener noreferrer">Открыть отдельно</a>{linkNotice && <p role="status">{linkNotice}</p>}</div>}<p className="privacy">Разрешите доступ к камере и медленно наведите её на свободный участок пола. MIRRAI не сохраняет изображение комнаты.</p>
         </aside>
       </div>
     </section>

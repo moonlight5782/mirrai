@@ -5,6 +5,21 @@
   var defaults = { productId: "product", name: "Посмотреть товар у себя", price: "", category: "Мебель", material: "", model: "", iosModel: "", variants: [], selectedVariantId: "", textured: "1", width: "80", height: "80", depth: "80", color: "#d2bda8", subscription: "active", label: "Посмотреть у себя", mode: "auto" };
   var allowedEvents = ["model_ready", "ar_open", "object_placed"];
   var instances = [], activeInstance = null, autoProductInstance = null, overlay = null, iframe = null, closeButton = null, observer = null, scanTimer = null, installationReported = {};
+  function mobileDevice() { return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1); }
+  function prepareMobileLauncher(instance) {
+    if (!mobileDevice() || instance.config.mode === "link" || !instance.config.shopId || !instance.config.sku) return;
+    var url = new URL(viewerUrl(instance.config));
+    url.searchParams.set("launcher", "1"); url.searchParams.set("shop", instance.config.shopId); url.searchParams.set("sku", instance.config.sku);
+    if (!instance.launcher) {
+      var frame = document.createElement("iframe"); frame.title = "Посмотреть " + instance.config.name + " у себя";
+      frame.loading = "lazy";
+      frame.allow = "camera; xr-spatial-tracking; fullscreen; clipboard-write";
+      style(frame, { width: "100%", height: "142px", border: "0", display: "block", background: "transparent" });
+      instance.target.appendChild(frame); instance.launcher = frame;
+    }
+    if (instance.launcher.src !== url.href) instance.launcher.src = url.href;
+    instance.launcher.style.display = "block"; instance.button.style.display = "none";
+  }
   function dataConfig(node) { var result = {}; if (!node || !node.dataset) return result; Object.keys(node.dataset).forEach(function (key) { result[key] = node.dataset[key]; }); if (node.dataset.mirraiSku !== undefined) result.sku = node.dataset.mirraiSku; return result; }
   function style(element, values) { Object.keys(values).forEach(function (key) { element.style[key] = values[key]; }); }
   function cleanSku(value) { return String(value || "").replace(/^(sku|артикул|код товара|модель)\s*[:#-]?\s*/i, "").trim().replace(/^#/, "").slice(0, 120); }
@@ -27,7 +42,8 @@
   async function openInstance(instance) {
     if (instance.opening) return;
     instance.opening = true;
-    var mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (instance.launcher) { instance.launcher.scrollIntoView({ block: "center", behavior: "smooth" }); instance.launcher.focus(); instance.opening = false; return; }
+    var mobile = mobileDevice();
     var useTab = instance.config.mode === "link" || (instance.config.mode === "auto" && mobile);
     // Reserve the mobile tab during the tap; async checks otherwise trigger popup blocking.
     var pendingTab = useTab ? window.open("about:blank", "_blank") : null;
@@ -44,12 +60,12 @@
     } finally { instance.opening = false; }
   }
   function createInstance(input) { var config = Object.assign({}, defaults, dataConfig(script), input || {}); var target = typeof config.target === "string" ? document.querySelector(config.target) : config.target; if (!target) target = script && script.parentElement ? script.parentElement : document.body; var button = document.createElement("button"); button.type = "button"; button.setAttribute("aria-label", config.label + ": " + config.name); button.textContent = config.label + "  ↗"; style(button, { width: "100%", minHeight: "50px", border: "0", background: "#181814", color: "#fff", padding: "14px 18px", font: "600 14px/1.2 Arial,sans-serif", letterSpacing: ".01em", cursor: "pointer" }); target.appendChild(button); var instance = { config: config, target: target, button: button }; instances.push(instance); if (config.shopId && config.sku && !config.model) button.style.display = "none"; button.addEventListener("click", function () { openInstance(instance); }); return instance; }
-  function applyResult(instance, result, subscriptionActive) { instance.ready = false; if (!subscriptionActive) { instance.button.textContent = "AR-примерка временно недоступна"; instance.button.disabled = true; instance.button.style.display = "block"; return; } if (!result || !result.available) { instance.button.style.display = "none"; return; } instance.config = Object.assign(instance.config, result, { sku: instance.config.sku }); instance.ready = true; instance.button.disabled = false; instance.button.textContent = instance.config.label + "  ↗"; instance.button.setAttribute("aria-label", instance.config.label + ": " + instance.config.name); instance.button.style.display = "block"; }
+  function applyResult(instance, result, subscriptionActive) { instance.ready = false; if (instance.launcher) instance.launcher.style.display = "none"; if (!subscriptionActive) { instance.button.textContent = "AR-примерка временно недоступна"; instance.button.disabled = true; instance.button.style.display = "block"; return; } if (!result || !result.available) { instance.button.style.display = "none"; return; } instance.config = Object.assign(instance.config, result, { sku: instance.config.sku }); instance.ready = true; instance.button.disabled = false; instance.button.textContent = instance.config.label + "  ↗"; instance.button.setAttribute("aria-label", instance.config.label + ": " + instance.config.name); instance.button.style.display = "block"; prepareMobileLauncher(instance); }
   function resolveInstances(list) {
     var unresolved = list.filter(function (item) { return item.config.shopId && item.config.sku; });
     if (!unresolved.length) return Promise.resolve();
     var groups = {};
-    unresolved.forEach(function (item) { item.ready = false; (groups[item.config.shopId] = groups[item.config.shopId] || []).push(item); });
+    unresolved.forEach(function (item) { item.ready = false; if (item.launcher) item.launcher.style.display = "none"; (groups[item.config.shopId] = groups[item.config.shopId] || []).push(item); });
     return Promise.all(Object.keys(groups).map(function (shopId) {
       var group = groups[shopId];
       var revisions = group.map(function (item) { item.revision = (item.revision || 0) + 1; return item.revision; });
@@ -59,13 +75,22 @@
         .catch(function () { group.forEach(function (item, index) { if (item.revision !== revisions[index]) return; item.ready = false; item.button.textContent = "Повторить загрузку AR ↻"; item.button.disabled = false; item.button.style.display = "block"; }); });
     }));
   }
-  function mount(input) { var instance = createInstance(input); resolveInstances([instance]); return { open: function () { openInstance(instance); }, close: closeModal, button: instance.button, update: function (next) { instance.config = Object.assign(instance.config, next || {}); resolveInstances([instance]); }, destroy: function () { instance.button.remove(); instances = instances.filter(function (item) { return item !== instance; }); } }; }
+  function mount(input) { var instance = createInstance(input); resolveInstances([instance]); return { open: function () { openInstance(instance); }, close: closeModal, button: instance.button, update: function (next) { instance.config = Object.assign(instance.config, next || {}); resolveInstances([instance]); }, destroy: function () { instance.button.remove(); if (instance.launcher) instance.launcher.remove(); instances = instances.filter(function (item) { return item !== instance; }); } }; }
   function reportInstallation(shopId) { if (!shopId || installationReported[shopId]) return; installationReported[shopId] = true; fetch(new URL("/api/widget/install", scriptOrigin), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shopId: shopId, pageUrl: window.location.href }), keepalive: true }).catch(function () { installationReported[shopId] = false; }); }
   function scan() { var globalConfig = dataConfig(script), created = []; document.querySelectorAll("[data-mirrai-sku]").forEach(function (node) { if (node.getAttribute("data-mirrai-mounted") === "true") return; node.setAttribute("data-mirrai-mounted", "true"); created.push(createInstance(Object.assign({}, globalConfig, dataConfig(node), { target: node, shopId: node.dataset.shopId || globalConfig.shopId }))); }); resolveInstances(created); reportInstallation(globalConfig.shopId); return created.length; }
   function mountProductPage() { var globalConfig = dataConfig(script), detected = detectPlatform(), platform = detected !== "custom" ? detected : (globalConfig.platform && globalConfig.platform !== "other" ? globalConfig.platform : detected), context = productContext(platform, globalConfig.allowUrlSku === "true"), sku = context.sku ? (globalConfig.skuPrefix || "") + context.sku : ""; if (!sku) { script.dispatchEvent(new CustomEvent("mirrai:error", { detail: { error: "sku_not_detected", platform: platform } })); return 0; } if (autoProductInstance) { if (autoProductInstance.config.sku !== sku) { autoProductInstance.config.sku = sku; autoProductInstance.config.platform = context.platform; resolveInstances([autoProductInstance]); } return 0; } var anchor = globalConfig.anchorSelector ? document.querySelector(globalConfig.anchorSelector) : context.anchor; if (!anchor || !anchor.parentNode) return 0; var target = document.createElement("div"); target.setAttribute("data-mirrai-auto-product", "true"); target.setAttribute("data-mirrai-platform", context.platform); style(target, { marginTop: "10px", marginBottom: "10px" }); anchor.parentNode.insertBefore(target, anchor.nextSibling); autoProductInstance = createInstance(Object.assign({}, globalConfig, { target: target, shopId: globalConfig.shopId, sku: sku, platform: context.platform })); resolveInstances([autoProductInstance]); reportInstallation(globalConfig.shopId); return 1; }
   function refresh() { var config = dataConfig(script); if (config.auto === "product") mountProductPage(); else if (config.auto === "universal" && !document.querySelector("[data-mirrai-sku]")) mountProductPage(); else scan(); }
   function observe() { if (observer || !window.MutationObserver) return; observer = new MutationObserver(function () { clearTimeout(scanTimer); scanTimer = setTimeout(refresh, 120); }); observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["data-sku", "content", "value"] }); document.addEventListener("change", function () { clearTimeout(scanTimer); scanTimer = setTimeout(refresh, 30); }, true); window.addEventListener("popstate", refresh); }
   window.addEventListener("message", function (event) { if (!iframe || event.source !== iframe.contentWindow || event.origin !== scriptOrigin || !event.data || event.data.source !== "mirrai-widget" || allowedEvents.indexOf(event.data.event) === -1 || !activeInstance) return; record(activeInstance, event.data.event); window.dispatchEvent(new CustomEvent("mirrai:event", { detail: event.data })); });
-  window.MirraiWidget = { version: "2.2.0", mount: mount, scan: scan, mountProductPage: mountProductPage, detectPlatform: detectPlatform, close: closeModal };
+  window.addEventListener("message", function (event) {
+    if (event.origin !== scriptOrigin || !event.data || event.data.source !== "mirrai-widget") return;
+    var instance = instances.find(function (item) { return item.launcher && item.launcher.contentWindow === event.source; });
+    if (!instance) return;
+    if (event.data.event === "launcher_resize" && Number.isFinite(event.data.height)) { instance.launcher.style.height = Math.max(142, Math.min(650, event.data.height)) + "px"; return; }
+    if (allowedEvents.indexOf(event.data.event) === -1) return;
+    if (event.data.event === "ar_open") record(instance, "widget_open");
+    record(instance, event.data.event); window.dispatchEvent(new CustomEvent("mirrai:event", { detail: event.data }));
+  });
+  window.MirraiWidget = { version: "2.3.0", mount: mount, scan: scan, mountProductPage: mountProductPage, detectPlatform: detectPlatform, close: closeModal };
   if (script && script.dataset.auto !== "false") { var start = function () { bootstrap(dataConfig(script)).then(function () { var config = dataConfig(script); if (config.auto === "product") { mountProductPage(); observe(); } else if (config.auto === "universal") { if (document.querySelector("[data-mirrai-sku]")) scan(); else mountProductPage(); observe(); } else if (config.auto === "scan" || document.querySelector("[data-mirrai-sku]")) { scan(); observe(); } else { mount(); reportInstallation(config.shopId); } }).catch(function () { script.dispatchEvent(new CustomEvent("mirrai:error", { detail: { error: "store_not_connected" } })); }); }; if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true }); else start(); }
 })();
