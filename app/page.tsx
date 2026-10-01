@@ -85,7 +85,7 @@ export default function Home() {
   const [accessReady, setAccessReady] = useState(false);
   const [accessChecked, setAccessChecked] = useState(false);
   const [platform, setPlatform] = useState(() => arPlatform());
-  const [phoneLink, setPhoneLink] = useState("");
+  const [viewerLocation, setViewerLocation] = useState("");
   const [qrCode, setQrCode] = useState("");
   const [linkNotice, setLinkNotice] = useState("");
   const accessUntil = useRef(0);
@@ -103,8 +103,11 @@ export default function Home() {
   useEffect(() => {
     import("@google/model-viewer");
     const params = new URLSearchParams(window.location.search);
-    setPlatform(arPlatform(navigator.userAgent, navigator.maxTouchPoints));
-    setLauncher(params.get("launcher") === "1");
+    queueMicrotask(() => {
+      setPlatform(arPlatform(navigator.userAgent, navigator.maxTouchPoints));
+      setLauncher(params.get("launcher") === "1");
+      setViewerLocation(window.location.href);
+    });
     if (params.get("widget") !== "1") {
       const openFromUrl = () => {
         const productId = new URLSearchParams(window.location.search).get("product");
@@ -147,17 +150,17 @@ export default function Home() {
     });
   }, []);
 
-  useEffect(() => {
-    if (view !== "viewer") return;
-    const shareUrl = new URL(window.location.href);
+  const phoneLink = useMemo(() => {
+    if (view !== "viewer" || !viewerLocation) return "";
+    const shareUrl = new URL(viewerLocation);
     for (const key of ["launcher", "parentOrigin", "variants", "selectedVariantId"]) shareUrl.searchParams.delete(key);
     if (isWidget) {
       shareUrl.searchParams.set("model", modelSource);
       shareUrl.searchParams.set("material", selectedMaterial);
       shareUrl.searchParams.set("color", selectedColor);
-    }
-    setPhoneLink(shareUrl.href);
-  }, [view, isWidget, modelSource, selectedMaterial, selectedColor, selected.id]);
+    } else shareUrl.searchParams.set("product", selected.id);
+    return shareUrl.href;
+  }, [view, viewerLocation, isWidget, modelSource, selectedMaterial, selectedColor, selected.id]);
 
   useEffect(() => {
     if (!phoneLink || platform.mobile) return;
