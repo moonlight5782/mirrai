@@ -1,5 +1,10 @@
 # Customer AR flow (SDK 2.3.0)
 
+The service-owned `hugge-md` presentation catalogue has explicit non-expiring
+demo access in `db/subscription.mjs`. Manual suspension still disables it.
+Other stores retain their normal subscription expiry checks; merchants cannot
+select this exception as a plan. Remove it when converting HUGGE to a paid tenant.
+
 On mobile, the widget resolves the published SKU and prepares a compact inline
 launcher in the product card. The buyer taps **Посмотреть у себя** after loading;
 there is no intermediate product viewer or popup. The click calls model-viewer

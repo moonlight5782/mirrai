@@ -8,6 +8,10 @@ export function timestamp(value) {
 export function subscriptionAccess(shop, now = Date.now()) {
   const status = shop.subscriptionStatus;
   if (status !== "active" && status !== "trial") return { allowed: false, status, expiresAt: null, reason: "subscription_inactive" };
+  // Service-owned presentation catalogue, not a merchant-selectable plan.
+  // Remove this explicit exception when HUGGE becomes a paying tenant.
+  // Manual suspension still wins above; all other tenants retain expiry checks.
+  if (shop.slug === "hugge-md") return { allowed: true, status: "demo", expiresAt: null, reason: null };
   let expiry = status === "trial" ? shop.trialEndsAt : shop.subscriptionEndsAt;
   // Existing pilot accounts get a bounded transition based on creation, not deploy time.
   if (!expiry && shop.plan === "pilot") {
