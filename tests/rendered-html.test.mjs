@@ -125,8 +125,9 @@ test("embeddable SDK creates a product-aware accessible AR launcher", async () =
   assert.match(sdk, /100dvh/);
   assert.match(viewer, /camera-orbit": "35deg 68deg 120%"/);
   assert.match(viewer, /previewCameraRadius/);
-  assert.match(viewer, /furnitureRatio - 1\.4\) \* \.25/);
-  assert.match(viewer, /Math\.min\(260,/);
+  // Numeric framing policy is exercised with real inputs in viewer-geometry.test.mjs.
+  // Keep this test about wiring, not the spelling/location of the formula.
+  assert.match(viewer, /previewCameraRadius\(selectedDimensions, viewportAspect\)/);
   assert.match(viewer, /ResizeObserver/);
   assert.doesNotMatch(viewer, /"disable-zoom": true/);
   assert.match(viewer, /масштабируйте двумя/);

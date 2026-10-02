@@ -1,5 +1,7 @@
 # MIRRAI
 
+Новому разработчику: [`docs/DEVELOPER_GUIDE_RU.md`](docs/DEVELOPER_GUIDE_RU.md) — запуск, карта исходников, правила безопасности и чек-лист выпуска.
+
 Подробная схема компонентов, потоков данных, установки виджета и границ готовности к production описана в [`docs/ARCHITECTURE_RU.md`](docs/ARCHITECTURE_RU.md).
 
 MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product from an online-store card and places it in their room at real scale without installing an app.
@@ -23,7 +25,7 @@ MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product fro
 - CSV catalog import with a downloadable template;
 - first-party GLB/USDZ uploads stored in R2;
 - 30-day AR funnel analytics per store and product;
-- versioned SDK 2.2.0 batch configuration, one shared modal and dynamic-page observation;
+- versioned SDK 2.3.0 batch configuration, mobile inline AR launcher, one shared desktop modal and dynamic-page observation;
 - responsive Russian-language interface and Cloudflare-compatible Sites build.
 
 ## Development
