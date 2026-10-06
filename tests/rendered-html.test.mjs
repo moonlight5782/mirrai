@@ -66,7 +66,7 @@ test("HUGGE demo reads real products and model states from the shared catalogue"
     readFile(new URL("../drizzle/0028_hugge_visual_qa.sql", import.meta.url), "utf8"),
   ]);
   assert.match(store, /api\/storefront\/catalog\?shop=hugge-md/);
-  assert.match(store, /catalog\.items\.find\(item => item\.demoAvailable\)/);
+  assert.match(store, /catalog\.items\.find\(\s*\(?item\)?\s*=>\s*item\.demoAvailable\s*,?\s*\)/);
   assert.match(store, /AR появится после повторной проверки 3D-модели/);
   assert.match(store, /selected\.model/);
   assert.match(route, /leftJoin\(productModels/);
@@ -204,7 +204,7 @@ test("navigation preserves shop context and furniture viewer URLs", async () => 
     readFile(new URL("../app/admin/subscription/subscription-admin.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(home, /history\.pushState/);
-  assert.match(home, /\.get\("product"\)/);
+  assert.match(home, /\.get\(\s*"product"\s*,?\s*\)/);
   assert.match(home, /popstate/);
   assert.match(navigation, /Активный магазин/);
   assert.match(navigation, /admin\/subscription/);
