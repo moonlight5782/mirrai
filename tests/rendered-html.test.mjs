@@ -2,12 +2,26 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-async function render(path = "/") {
+async function render(path = "/", headers = {}) {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
-  return worker.fetch(new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
+  return worker.fetch(new Request(`http://localhost${path}`, { headers: { accept: "text/html", ...headers } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
 }
+
+test("language is resolved before SSR and persists through the locale cookie", async () => {
+  for (const [path, headers, locale, word] of [
+    ["/demo-store?lang=ro", {}, "ro", "Mobilier pe care"],
+    ["/demo-store", { cookie: "mirrai_locale=en" }, "en", "Furniture you can"],
+    ["/demo-store?lang=ru", { cookie: "mirrai_locale=en" }, "ru", "Мебель, которую"],
+  ]) {
+    const response = await render(path, headers);
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, new RegExp(`<html[^>]*lang="${locale}"`));
+    assert.ok(html.includes(word));
+  }
+});
 
 test("server renders the furniture-first MIRRAI experience", async () => {
   const response = await render();
@@ -236,7 +250,7 @@ test("commercial pilot architecture supports secure tenant roles, imports, R2 as
   ]);
   assert.match(schema, /shopMembers/); assert.match(schema, /shopInvites/); assert.match(schema, /platformOperators/); assert.match(schema, /export const assets/);
   assert.match(auth, /catalog:write/); assert.match(auth, /members:write/); assert.match(invitations, /acceptInvitation/); assert.match(invitations, /tokenHash/); assert.match(members, /invitationUrl/); assert.match(clients, /ownerEmail/); assert.match(importer, /parseCsv/); assert.match(upload, /getUploadsBucket/);
-  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "2\.3\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
+  assert.match(config, /export async function POST/); assert.match(config, /skus/); assert.match(sdk, /MutationObserver/); assert.match(sdk, /version: "2\.4\.0"/); assert.match(sdk, /mountProductPage/); assert.match(sdk, /destroy/);
   assert.match(hosting, /"r2": "UPLOADS"/); assert.match(migration, /CREATE TABLE `assets`/);
 });
 

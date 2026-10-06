@@ -7,6 +7,7 @@ import {
   dimensionsMatch,
   previewCameraRadius,
 } from "../lib/viewer-geometry.mjs";
+import { useI18n } from "./language-provider";
 
 type View = "landing" | "viewer";
 type UploadState = "idle" | "ready" | "error";
@@ -109,7 +110,9 @@ function safeAssetUrl(value: string | null, fallback: string) {
 
 function positiveNumber(value: string | null, fallback: number) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 && parsed < 5000 ? parsed : fallback;
+  return Number.isFinite(parsed) && parsed > 0 && parsed < 5000
+    ? parsed
+    : fallback;
 }
 
 function safeVariants(value: string | null): ProductVariant[] {
@@ -121,17 +124,27 @@ function safeVariants(value: string | null): ProductVariant[] {
       if (!item || typeof item !== "object") return [];
       const variant = item as Record<string, unknown>;
       const id = String(variant.id ?? "").slice(0, 80);
-      const model = safeAssetUrl(typeof variant.model === "string" ? variant.model : null, "");
-      if (!id || !/^#[0-9a-f]{6}$/i.test(String(variant.color ?? ""))) return [];
+      const model = safeAssetUrl(
+        typeof variant.model === "string" ? variant.model : null,
+        "",
+      );
+      if (!id || !/^#[0-9a-f]{6}$/i.test(String(variant.color ?? "")))
+        return [];
       return [
         {
           id,
           sku: String(variant.sku ?? "").slice(0, 120),
           name: String(variant.name ?? "").slice(0, 80),
-          colorName: String(variant.colorName ?? variant.name ?? "Цвет").slice(0, 80),
+          colorName: String(variant.colorName ?? variant.name ?? "Цвет").slice(
+            0,
+            80,
+          ),
           color: String(variant.color),
           material: String(variant.material ?? "").slice(0, 160),
-          image: typeof variant.image === "string" ? safeAssetUrl(variant.image, "") : undefined,
+          image:
+            typeof variant.image === "string"
+              ? safeAssetUrl(variant.image, "")
+              : undefined,
           model: model || undefined,
           iosModel:
             typeof variant.iosModel === "string"
@@ -147,11 +160,13 @@ function safeVariants(value: string | null): ProductVariant[] {
   }
 }
 
-function dimensionsLabel(value: Dimensions) {
-  return `${value.width} × ${value.depth} × ${value.height} см`;
+function dimensionsLabel(value: Dimensions, locale = "ru") {
+  return `${value.width} × ${value.depth} × ${value.height} ${locale === "ru" ? "см" : "cm"}`;
 }
 
 export default function Home() {
+  const { t, locale } = useI18n();
+
   const [view, setView] = useState<View>("landing");
   const [active, setActive] = useState(0);
   const [activeVariantId, setActiveVariantId] = useState("");
@@ -159,7 +174,7 @@ export default function Home() {
   const [isWidget, setIsWidget] = useState(false);
   const [subscriptionActive, setSubscriptionActive] = useState(true);
   const [targetOrigin, setTargetOrigin] = useState("*");
-  const [arStatus, setArStatus] = useState("Подготавливаем точный масштаб…");
+  const [arStatus, setArStatus] = useState(t("Подготавливаем точный масштаб…"));
   const [customName, setCustomName] = useState("");
   const [customModel, setCustomModel] = useState("");
   const [customDimensions, setCustomDimensions] = useState<Dimensions>({
@@ -182,17 +197,25 @@ export default function Home() {
   const accessUntil = useRef(0);
   const arRef = useRef<ModelViewerElement>(null);
 
-  const catalog = useMemo(() => (widgetProduct ? [widgetProduct] : products), [widgetProduct]);
+  const catalog = useMemo(
+    () => (widgetProduct ? [widgetProduct] : products),
+    [widgetProduct],
+  );
   const selected = catalog[Math.min(active, catalog.length - 1)] ?? products[0];
   const selectedVariants = selected.variants ?? [];
   const selectedVariant =
-    selectedVariants.find(variant => variant.id === activeVariantId && variant.available) ??
     selectedVariants.find(
-      variant => variant.id === selected.selectedVariantId && variant.available,
+      (variant) => variant.id === activeVariantId && variant.available,
     ) ??
-    selectedVariants.find(variant => variant.default && variant.available) ??
-    selectedVariants.find(variant => variant.available);
-  const selectedDimensions = customName ? customDimensions : selected.dimensions;
+    selectedVariants.find(
+      (variant) =>
+        variant.id === selected.selectedVariantId && variant.available,
+    ) ??
+    selectedVariants.find((variant) => variant.default && variant.available) ??
+    selectedVariants.find((variant) => variant.available);
+  const selectedDimensions = customName
+    ? customDimensions
+    : selected.dimensions;
   const modelSource = customModel || selectedVariant?.model || selected.model;
   const selectedColor = selectedVariant?.color || selected.color;
   const selectedMaterial = selectedVariant?.material || selected.material;
@@ -207,8 +230,10 @@ export default function Home() {
     });
     if (params.get("widget") !== "1") {
       const openFromUrl = () => {
-        const productId = new URLSearchParams(window.location.search).get("product");
-        const index = products.findIndex(item => item.id === productId);
+        const productId = new URLSearchParams(window.location.search).get(
+          "product",
+        );
+        const index = products.findIndex((item) => item.id === productId);
         if (index >= 0) {
           setActive(index);
           setView("viewer");
@@ -220,24 +245,34 @@ export default function Home() {
     }
     const base = products[0];
     const variants = safeVariants(params.get("variants"));
-    const requestedVariantId = params.get("selectedVariantId")?.slice(0, 80) ?? "";
+    const requestedVariantId =
+      params.get("selectedVariantId")?.slice(0, 80) ?? "";
     const preferredVariant =
-      variants.find(variant => variant.id === requestedVariantId && variant.available) ??
-      variants.find(variant => variant.default && variant.available) ??
-      variants.find(variant => variant.available);
+      variants.find(
+        (variant) => variant.id === requestedVariantId && variant.available,
+      ) ??
+      variants.find((variant) => variant.default && variant.available) ??
+      variants.find((variant) => variant.available);
     const product: Product = {
       id: params.get("productId")?.slice(0, 80) || base.id,
       name: params.get("name")?.slice(0, 120) || base.name,
       category: params.get("category")?.slice(0, 80) || base.category,
       material:
-        preferredVariant?.material || params.get("material")?.slice(0, 120) || base.material,
+        preferredVariant?.material ||
+        params.get("material")?.slice(0, 120) ||
+        base.material,
       price: params.get("price")?.slice(0, 50) || base.price,
       color:
         preferredVariant?.color ??
-        (/^#[0-9a-f]{6}$/i.test(params.get("color") ?? "") ? params.get("color")! : base.color),
-      model: preferredVariant?.model ?? safeAssetUrl(params.get("model"), base.model),
+        (/^#[0-9a-f]{6}$/i.test(params.get("color") ?? "")
+          ? params.get("color")!
+          : base.color),
+      model:
+        preferredVariant?.model ??
+        safeAssetUrl(params.get("model"), base.model),
       iosModel:
-        preferredVariant?.iosModel ?? (safeAssetUrl(params.get("iosModel"), "") || undefined),
+        preferredVariant?.iosModel ??
+        (safeAssetUrl(params.get("iosModel"), "") || undefined),
       textured: params.get("textured") === "1",
       dimensions: {
         width: positiveNumber(params.get("width"), base.dimensions.width),
@@ -269,7 +304,13 @@ export default function Home() {
   const phoneLink = useMemo(() => {
     if (view !== "viewer" || !viewerLocation) return "";
     const shareUrl = new URL(viewerLocation);
-    for (const key of ["launcher", "parentOrigin", "variants", "selectedVariantId"])
+    shareUrl.searchParams.set("lang", locale);
+    for (const key of [
+      "launcher",
+      "parentOrigin",
+      "variants",
+      "selectedVariantId",
+    ])
       shareUrl.searchParams.delete(key);
     if (isWidget) {
       shareUrl.searchParams.set("model", modelSource);
@@ -277,14 +318,23 @@ export default function Home() {
       shareUrl.searchParams.set("color", selectedColor);
     } else shareUrl.searchParams.set("product", selected.id);
     return shareUrl.href;
-  }, [view, viewerLocation, isWidget, modelSource, selectedMaterial, selectedColor, selected.id]);
+  }, [
+    view,
+    viewerLocation,
+    isWidget,
+    modelSource,
+    selectedMaterial,
+    selectedColor,
+    selected.id,
+    locale,
+  ]);
 
   useEffect(() => {
     if (!phoneLink || platform.mobile) return;
     let cancelled = false;
     import("qrcode")
-      .then(module => module.toDataURL(phoneLink, { width: 220, margin: 2 }))
-      .then(value => {
+      .then((module) => module.toDataURL(phoneLink, { width: 220, margin: 2 }))
+      .then((value) => {
         if (!cancelled) setQrCode(value);
       })
       .catch(() => {});
@@ -304,9 +354,12 @@ export default function Home() {
     const check = async () => {
       try {
         if (!shop || !sku) throw new Error("missing_shop");
-        const response = await fetch(`/api/widget/config?${new URLSearchParams({ shop, sku })}`, {
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/api/widget/config?${new URLSearchParams({ shop, sku })}`,
+          {
+            cache: "no-store",
+          },
+        );
         const result = await response.json();
         if (cancelled) return;
         const sameModel =
@@ -397,7 +450,7 @@ export default function Home() {
     resetCustomAsset();
     setActive(index);
     setActiveVariantId(products[index]?.selectedVariantId ?? "");
-    setArStatus("Загружаем выбранную модель…");
+    setArStatus(t("Загружаем выбранную модель…"));
     window.history.replaceState(
       { mirraiViewer: true },
       "",
@@ -409,7 +462,7 @@ export default function Home() {
     if (!variant.available || !variant.model) return;
     resetCustomAsset();
     setActiveVariantId(variant.id);
-    setArStatus(`Загружаем цвет «${variant.colorName}»…`);
+    setArStatus(t("Загружаем цвет «{color}»…", { color: variant.colorName }));
   }
 
   useEffect(() => {
@@ -418,9 +471,10 @@ export default function Home() {
     let cancelled = false;
     let verifying = false;
     setScaleState("checking");
-    setArStatus("Проверяем размеры модели перед запуском AR…");
+    setArStatus(t("Проверяем размеры модели перед запуском AR…"));
     const fitPreviewCamera = () => {
-      const viewportAspect = viewer.clientWidth / Math.max(viewer.clientHeight, 1);
+      const viewportAspect =
+        viewer.clientWidth / Math.max(viewer.clientHeight, 1);
       const radius = previewCameraRadius(selectedDimensions, viewportAspect);
       viewer.setAttribute("camera-orbit", `35deg 68deg ${radius}%`);
       viewer.jumpCameraToGoal?.();
@@ -429,7 +483,7 @@ export default function Home() {
       if (verifying) return;
       verifying = true;
       viewer.setAttribute("scale", "1 1 1");
-      await new Promise<void>(resolve =>
+      await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );
       // A product change can dispose this effect while a frame is pending.
@@ -439,12 +493,16 @@ export default function Home() {
       if (
         !source ||
         ![source.x, source.y, source.z, target.x, target.y, target.z].every(
-          value => Number.isFinite(value) && value > 0,
+          (value) => Number.isFinite(value) && value > 0,
         )
       ) {
         if (!cancelled) {
           setScaleState("error");
-          setArStatus("Не удалось проверить физические размеры модели. AR заблокирован.");
+          setArStatus(
+            t(
+              "Не удалось проверить физические размеры модели. AR заблокирован.",
+            ),
+          );
         }
         return;
       }
@@ -460,11 +518,14 @@ export default function Home() {
         "ar-modes",
         bakedSize ? "webxr scene-viewer quick-look" : "webxr quick-look",
       );
-      viewer.setAttribute("scale", scale.map(value => value.toFixed(7)).join(" "));
+      viewer.setAttribute(
+        "scale",
+        scale.map((value) => value.toFixed(7)).join(" "),
+      );
       await viewer.updateFraming?.();
       if (cancelled) return;
       fitPreviewCamera();
-      await new Promise<void>(resolve =>
+      await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );
       const measured = viewer.getDimensions?.();
@@ -472,12 +533,18 @@ export default function Home() {
       if (cancelled) return;
       if (!withinTolerance) {
         setScaleState("error");
-        setArStatus("Размер модели не прошёл проверку 1:1. AR заблокирован.");
+        setArStatus(
+          t("Размер модели не прошёл проверку 1:1. AR заблокирован."),
+        );
         return;
       }
       setScaleState("verified");
       setArStatus(
-        `${customName || selected.name} · ${selectedVariant?.colorName ?? "основной цвет"} — проверено 1:1: ${selectedDimensions.width} × ${selectedDimensions.depth} × ${selectedDimensions.height} см`,
+        t("{name} · {color} — проверено 1:1: {dimensions}", {
+          name: customName || selected.name,
+          color: selectedVariant?.colorName ?? t("основной цвет"),
+          dimensions: dimensionsLabel(selectedDimensions, locale),
+        }),
       );
       if (isWidget && window.parent !== window)
         window.parent.postMessage(
@@ -496,12 +563,12 @@ export default function Home() {
     };
     const onError = () => {
       setScaleState("error");
-      setArStatus("Модель не загрузилась. Проверьте GLB товара.");
+      setArStatus(t("Модель не загрузилась. Проверьте GLB товара."));
     };
     const onArStatus = (event: Event) => {
       const status = (event as CustomEvent<{ status: string }>).detail?.status;
       if (status === "object-placed") {
-        setArStatus("Предмет размещён в вашем пространстве");
+        setArStatus(t("Предмет размещён в вашем пространстве"));
         if (isWidget && window.parent !== window)
           window.parent.postMessage(
             {
@@ -514,8 +581,11 @@ export default function Home() {
           );
       } else if (status === "failed") {
         setArHelp(true);
-        setArStatus("Не удалось открыть камеру в этом браузере.");
-      } else setArStatus("Медленно направляйте камеру на свободный участок пола…");
+        setArStatus(t("Не удалось открыть камеру в этом браузере."));
+      } else
+        setArStatus(
+          t("Медленно направляйте камеру на свободный участок пола…"),
+        );
     };
     viewer.addEventListener("load", onLoad);
     viewer.addEventListener("error", onError);
@@ -544,19 +614,23 @@ export default function Home() {
     customName,
     isWidget,
     targetOrigin,
+    locale,
+    t,
   ]);
 
   async function openAR() {
     if (launcher && (!accessReady || Date.now() > accessUntil.current)) {
       setAccessReady(false);
-      setArStatus("Проверяем доступность товара. Попробуйте через несколько секунд.");
+      setArStatus(
+        t("Проверяем доступность товара. Попробуйте через несколько секунд."),
+      );
       return;
     }
     if (scaleState !== "verified") {
       setArStatus(
         scaleState === "error"
-          ? "AR заблокирован: модель не прошла проверку размеров."
-          : "Дождитесь проверки масштаба 1:1.",
+          ? t("AR заблокирован: модель не прошла проверку размеров.")
+          : t("Дождитесь проверки масштаба 1:1."),
       );
       return;
     }
@@ -565,21 +639,25 @@ export default function Home() {
       return;
     }
     emitWidgetEvent("ar_open");
-    setArStatus("Запускаем камеру и поиск поверхности…");
+    setArStatus(t("Запускаем камеру и поиск поверхности…"));
     try {
       await arRef.current?.activateAR?.();
     } catch {
       setArHelp(true);
-      setArStatus("Камера не открылась. 3D-просмотр остаётся доступен.");
+      setArStatus(t("Камера не открылась. 3D-просмотр остаётся доступен."));
     }
   }
 
   async function copyPhoneLink() {
     try {
       await navigator.clipboard.writeText(phoneLink);
-      setLinkNotice(`Ссылка скопирована. Вставьте её в ${platform.browser}.`);
+      setLinkNotice(
+        t("Ссылка скопирована. Вставьте её в {browser}.", {
+          browser: platform.browser,
+        }),
+      );
     } catch {
-      setLinkNotice("Нажмите и удерживайте ссылку, чтобы скопировать её.");
+      setLinkNotice(t("Нажмите и удерживайте ссылку, чтобы скопировать её."));
     }
   }
 
@@ -592,13 +670,15 @@ export default function Home() {
     if (isModel) {
       setCustomModel(URL.createObjectURL(file));
       setUploadState("ready");
-      setUploadMessage("GLB распознан. Размер применяется из полей выше.");
-      setArStatus("Модель готова — проверьте масштаб и откройте AR");
+      setUploadMessage(t("GLB распознан. Размер применяется из полей выше."));
+      setArStatus(t("Модель готова — проверьте масштаб и откройте AR"));
       return;
     }
     setUploadState("error");
     setUploadMessage(
-      "На публичной странице принимается только GLB. Фотографии загружаются в защищённом кабинете магазина.",
+      t(
+        "На публичной странице принимается только GLB. Фотографии загружаются в защищённом кабинете магазина.",
+      ),
     );
   }
 
@@ -608,8 +688,8 @@ export default function Home() {
         <div>
           <span>MIRRAI</span>
           <p>
-            Вы прекрасно выглядите в любой одежде.
-            <br />А ваша мебель — в любом интерьере.
+            {t("Вы прекрасно выглядите в любой одежде.")} <br />
+            {t("А ваша мебель — в любом интерьере.")}{" "}
           </p>
         </div>
       </main>
@@ -643,31 +723,37 @@ export default function Home() {
           disabled={scaleState !== "verified" || !accessReady}
         >
           {scaleState === "error"
-            ? "Не удалось загрузить модель"
+            ? t("Не удалось загрузить модель")
             : accessChecked && !accessReady
-              ? "Примерка временно недоступна"
+              ? t("Примерка временно недоступна")
               : scaleState !== "verified"
-                ? "Готовим просмотр…"
+                ? t("Готовим просмотр…")
                 : !accessReady
-                  ? "Проверяем доступность…"
-                  : "Посмотреть у себя"}
+                  ? t("Проверяем доступность…")
+                  : t("Посмотреть у себя")}
           <span aria-hidden="true">↗</span>
         </button>
         <p className="ar-launch-note" role="status">
-          {arHelp ? "Этот браузер не открыл камеру." : "Наведите камеру на пол · размер 1:1"}
+          {arHelp
+            ? t("Этот браузер не открыл камеру.")
+            : t("Наведите камеру на пол · размер 1:1")}
         </p>
         {arHelp && (
           <div className="ar-browser-help">
             <p>
-              В меню приложения выберите «Открыть в {platform.browser}». Если такого пункта нет,
-              скопируйте ссылку.
+              {t(
+                "В меню приложения выберите «Открыть в {browser}». Если такого пункта нет, скопируйте ссылку.",
+                { browser: platform.browser },
+              )}
             </p>
-            <button onClick={copyPhoneLink}>Скопировать ссылку</button>
+            <button onClick={copyPhoneLink}>{t("Скопировать ссылку")}</button>
             {linkNotice && <p role="status">{linkNotice}</p>}
           </div>
         )}
         <a href={phoneLink} target="_top">
-          {scaleState === "error" ? "Открыть просмотр и повторить" : "Посмотреть в 3D"}
+          {scaleState === "error"
+            ? t("Открыть просмотр и повторить")
+            : t("Посмотреть в 3D")}
         </a>
       </main>
     );
@@ -681,11 +767,11 @@ export default function Home() {
               MIRR<span>AI</span>
             </a>
             <div className="nav-links">
-              <a href="/#catalog">Каталог</a>
-              <a href="/#business">Для магазинов</a>
+              <a href="/#catalog">{t("Каталог")}</a>
+              <a href="/#business">{t("Для магазинов")}</a>
             </div>
             <button className="nav-cta" onClick={closeViewer}>
-              На главную <span>↗</span>
+              {t("На главную")} <span>↗</span>
             </button>
           </nav>
         )}
@@ -694,27 +780,29 @@ export default function Home() {
             <div>
               {!isWidget && (
                 <button className="back" onClick={closeViewer}>
-                  ← Назад
+                  {t("← Назад")}{" "}
                 </button>
               )}
-              <p>AR-просмотр · реальный масштаб</p>
+              <p>{t("AR-просмотр · реальный масштаб")}</p>
               <h1>{selected.name}</h1>
             </div>
             <div className={`ready-pill ${scaleState}`}>
               <i />{" "}
               {scaleState === "verified"
-                ? "МАСШТАБ 1:1 ПРОВЕРЕН"
+                ? t("МАСШТАБ 1:1 ПРОВЕРЕН")
                 : scaleState === "error"
-                  ? "AR НЕДОСТУПЕН"
-                  : "ПРОВЕРЯЕМ МАСШТАБ"}
+                  ? t("AR НЕДОСТУПЕН")
+                  : t("ПРОВЕРЯЕМ МАСШТАБ")}
             </div>
           </header>
           <div className="viewer-grid">
             {!isWidget && (
               <aside className="catalog-panel">
                 <div className="panel-title">
-                  <span>Каталог</span>
-                  <small>{catalog.length} модели</small>
+                  <span>{t("Каталог")}</span>
+                  <small>
+                    {catalog.length} {t("модели")}
+                  </small>
                 </div>
                 {catalog.map((item, index) => (
                   <button
@@ -730,7 +818,9 @@ export default function Home() {
                       <strong>{item.name}</strong>
                       <em>{item.price}</em>
                     </span>
-                    <b className="select-mark">{active === index && !customName ? "✓" : "+"}</b>
+                    <b className="select-mark">
+                      {active === index && !customName ? "✓" : "+"}
+                    </b>
                   </button>
                 ))}
               </aside>
@@ -742,7 +832,14 @@ export default function Home() {
                   key: modelSource,
                   ref: arRef,
                   src: modelSource,
-                  alt: `3D-модель ${customName || selected.name}${selectedVariant ? `, цвет ${selectedVariant.colorName}` : ""}`,
+                  alt:
+                    t("3D-модель {name}", {
+                      name: customName || selected.name,
+                    }) +
+                    (selectedVariant
+                      ? ", " +
+                        t("цвет {color}", { color: selectedVariant.colorName })
+                      : ""),
                   ar: true,
                   "ar-modes": "webxr scene-viewer quick-look",
                   "ar-placement": "floor",
@@ -767,14 +864,16 @@ export default function Home() {
                     disabled: scaleState !== "verified",
                     "aria-disabled": scaleState !== "verified",
                   },
-                  scaleState === "verified" ? "Посмотреть у себя" : "Проверяем 1:1",
+                  scaleState === "verified"
+                    ? t("Посмотреть у себя")
+                    : t("Проверяем 1:1"),
                   React.createElement("span", null, "↗"),
                 ),
               )}
               <div className="room-preview">
                 <i className="preview-window" />
                 <i className="preview-floor" />
-                <span>Вращайте одним пальцем · масштабируйте двумя</span>
+                <span>{t("Вращайте одним пальцем · масштабируйте двумя")}</span>
               </div>
               <div className="viewer-badges">
                 <span>
@@ -784,15 +883,21 @@ export default function Home() {
                       ? "PBR MATERIALS"
                       : "GEOMETRY PREVIEW"}
                 </span>
-                <span>{scaleState === "verified" ? "AR SCALE 1:1 ✓" : "AR SCALE CHECK"}</span>
+                <span>
+                  {scaleState === "verified"
+                    ? "AR SCALE 1:1 ✓"
+                    : "AR SCALE CHECK"}
+                </span>
                 <span>ADAPTIVE LIGHT</span>
               </div>
             </div>
             <aside className="details-panel">
               <div>
-                <p className="control-label">Товар</p>
+                <p className="control-label">{t("Товар")}</p>
                 <h2>{customName || selected.name}</h2>
-                <p className="price">{customName ? "Пользовательская модель" : selected.price}</p>
+                <p className="price">
+                  {customName ? t("Пользовательская модель") : selected.price}
+                </p>
                 <div className="material-row">
                   <i style={{ background: selectedColor }} />
                   <span>{selectedMaterial}</span>
@@ -800,95 +905,127 @@ export default function Home() {
               </div>
               {!customName && selectedVariants.length > 0 && (
                 <div className="variant-selector">
-                  <p className="control-label">Цвет на сайте магазина</p>
-                  <div className="variant-swatches" role="list" aria-label="Доступные цвета товара">
-                    {selectedVariants.map(variant => (
+                  <p className="control-label">{t("Цвет на сайте магазина")}</p>
+                  <div
+                    className="variant-swatches"
+                    role="list"
+                    aria-label={t("Доступные цвета товара")}
+                  >
+                    {selectedVariants.map((variant) => (
                       <button
                         key={variant.id}
                         type="button"
                         title={
                           variant.available
                             ? variant.colorName
-                            : `${variant.colorName} — 3D готовится`
+                            : t("{color} — 3D готовится", {
+                                color: variant.colorName,
+                              })
                         }
                         aria-label={
                           variant.available
-                            ? `Выбрать цвет ${variant.colorName}`
-                            : `${variant.colorName}: 3D-модель ещё не готова`
+                            ? t("Выбрать цвет {color}", {
+                                color: variant.colorName,
+                              })
+                            : t("{color}: 3D-модель ещё не готова", {
+                                color: variant.colorName,
+                              })
                         }
                         aria-pressed={selectedVariant?.id === variant.id}
                         disabled={!variant.available}
-                        className={selectedVariant?.id === variant.id ? "active" : ""}
+                        className={
+                          selectedVariant?.id === variant.id ? "active" : ""
+                        }
                         onClick={() => selectVariant(variant)}
                       >
                         <i style={{ background: variant.color }} />
                         <span>{variant.colorName}</span>
-                        {!variant.available && <small>3D готовится</small>}
+                        {!variant.available && (
+                          <small>{t("3D готовится")}</small>
+                        )}
                       </button>
                     ))}
                   </div>
                   <p className="variant-note">
-                    В AR открывается отдельная модель выбранного магазином варианта, а не
-                    приблизительная перекраска.
+                    {t(
+                      "В AR открывается отдельная модель выбранного магазином варианта, а не приблизительная перекраска.",
+                    )}{" "}
                   </p>
                 </div>
               )}
               <div>
-                <p className="control-label">Габариты · Ш × Г × В</p>
-                <strong className="dimensions">{dimensionsLabel(selectedDimensions)}</strong>
+                <p className="control-label">{t("Габариты · Ш × Г × В")}</p>
+                <strong className="dimensions">
+                  {dimensionsLabel(selectedDimensions, locale)}
+                </strong>
                 <p className="hint">
-                  Модель зафиксирована в указанном масштабе. Покупатель не может случайно изменить
-                  размер в AR.
+                  {t(
+                    "Модель зафиксирована в указанном масштабе. Покупатель не может случайно изменить размер в AR.",
+                  )}{" "}
                 </p>
               </div>
               <div>
-                <p className="control-label">Освещение превью</p>
+                <p className="control-label">{t("Освещение превью")}</p>
                 <div className="range-row">
                   <input
-                    aria-label="Экспозиция 3D-превью"
+                    aria-label={t("Экспозиция 3D-превью")}
                     type="range"
                     min="0.65"
                     max="1.35"
                     step="0.05"
                     value={exposure}
-                    onChange={event => setExposure(Number(event.target.value))}
+                    onChange={(event) =>
+                      setExposure(Number(event.target.value))
+                    }
                   />
                   <span>{Math.round(exposure * 100)}%</span>
                 </div>
                 <p className="hint">
-                  В системном AR свет и цвет адаптируются камерой устройства автоматически.
+                  {t(
+                    "В системном AR свет и цвет адаптируются камерой устройства автоматически.",
+                  )}{" "}
                 </p>
               </div>
               {!isWidget && (
                 <div className="asset-upload">
-                  <p className="control-label">Локальная проверка готовой модели</p>
+                  <p className="control-label">
+                    {t("Локальная проверка готовой модели")}
+                  </p>
                   <div className="dimension-inputs">
-                    {(["width", "depth", "height"] as const).map((key, index) => (
-                      <label key={key}>
-                        <span>{["Ш", "Г", "В"][index]}, см</span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="5000"
-                          value={customDimensions[key]}
-                          onChange={event =>
-                            setCustomDimensions(current => ({
-                              ...current,
-                              [key]: positiveNumber(event.target.value, current[key]),
-                            }))
-                          }
-                        />
-                      </label>
-                    ))}
+                    {(["width", "depth", "height"] as const).map(
+                      (key, index) => (
+                        <label key={key}>
+                          <span>
+                            {[t("Ш"), t("Г"), t("В")][index]}
+                            {t(", см")}
+                          </span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="5000"
+                            value={customDimensions[key]}
+                            onChange={(event) =>
+                              setCustomDimensions((current) => ({
+                                ...current,
+                                [key]: positiveNumber(
+                                  event.target.value,
+                                  current[key],
+                                ),
+                              }))
+                            }
+                          />
+                        </label>
+                      ),
+                    )}
                   </div>
                   <label className="upload-button">
                     <input
                       type="file"
                       accept=".glb,model/gltf-binary"
-                      onChange={event => handleAsset(event.target.files?.[0])}
+                      onChange={(event) => handleAsset(event.target.files?.[0])}
                     />
                     <span>＋</span>
-                    <b>Выбрать готовый GLB</b>
+                    <b>{t("Выбрать готовый GLB")}</b>
                   </label>
                   {uploadState !== "idle" && (
                     <div className={`asset-result ${uploadState}`}>
@@ -900,8 +1037,9 @@ export default function Home() {
                     </div>
                   )}
                   <p className="hint">
-                    Фотографии товаров загружаются в кабинете магазина, где MIRRAI безопасно
-                    отправляет их в очередь генерации.
+                    {t(
+                      "Фотографии товаров загружаются в кабинете магазина, где MIRRAI безопасно отправляет их в очередь генерации.",
+                    )}{" "}
                   </p>
                 </div>
               )}
@@ -910,18 +1048,24 @@ export default function Home() {
                 <p>{arStatus}</p>
               </div>
               {platform.mobile ? (
-                <button className="primary" onClick={openAR} disabled={scaleState !== "verified"}>
+                <button
+                  className="primary"
+                  onClick={openAR}
+                  disabled={scaleState !== "verified"}
+                >
                   {scaleState === "verified"
-                    ? "Посмотреть у себя"
+                    ? t("Посмотреть у себя")
                     : scaleState === "error"
-                      ? "Модель временно недоступна"
-                      : "Готовим просмотр…"}
+                      ? t("Модель временно недоступна")
+                      : t("Готовим просмотр…")}
                   <span>↗</span>
                 </button>
               ) : (
                 <div className="ar-phone-handoff">
-                  <strong>Посмотрите у себя с телефона</strong>
-                  <p>Наведите камеру телефона на QR-код и откройте ссылку.</p>
+                  <strong>{t("Посмотрите у себя с телефона")}</strong>
+                  <p>
+                    {t("Наведите камеру телефона на QR-код и откройте ссылку.")}
+                  </p>
                   {qrCode && (
                     // Locally generated data URL: no network image or optimisation endpoint.
                     // eslint-disable-next-line @next/next/no-img-element
@@ -929,30 +1073,38 @@ export default function Home() {
                       src={qrCode}
                       width="220"
                       height="220"
-                      alt="QR-код для открытия этого товара на телефоне"
+                      alt={t("QR-код для открытия этого товара на телефоне")}
                     />
                   )}
-                  <button onClick={copyPhoneLink}>Скопировать ссылку</button>
+                  <button onClick={copyPhoneLink}>
+                    {t("Скопировать ссылку")}
+                  </button>
                   {linkNotice && <p role="status">{linkNotice}</p>}
                 </div>
               )}
               {arHelp && (
                 <div className="ar-browser-help">
-                  <strong>Откройте в {platform.browser}</strong>
+                  <strong>
+                    {t("Откройте в")} {platform.browser}
+                  </strong>
                   <p>
-                    В меню приложения выберите «Открыть в браузере» или скопируйте ссылку. Если
-                    телефон не поддерживает AR, вы можете продолжить вращать модель здесь.
+                    {t(
+                      "В меню приложения выберите «Открыть в браузере» или скопируйте ссылку. Если телефон не поддерживает AR, вы можете продолжить вращать модель здесь.",
+                    )}{" "}
                   </p>
-                  <button onClick={copyPhoneLink}>Скопировать ссылку</button>
+                  <button onClick={copyPhoneLink}>
+                    {t("Скопировать ссылку")}
+                  </button>
                   <a href={phoneLink} target="_blank" rel="noopener noreferrer">
-                    Открыть отдельно
+                    {t("Открыть отдельно")}{" "}
                   </a>
                   {linkNotice && <p role="status">{linkNotice}</p>}
                 </div>
               )}
               <p className="privacy">
-                Разрешите доступ к камере и медленно наведите её на свободный участок пола. MIRRAI
-                не сохраняет изображение комнаты.
+                {t(
+                  "Разрешите доступ к камере и медленно наведите её на свободный участок пола. MIRRAI не сохраняет изображение комнаты.",
+                )}{" "}
               </p>
             </aside>
           </div>
@@ -967,37 +1119,39 @@ export default function Home() {
           MIRR<span>AI</span>
         </a>
         <div className="nav-links">
-          <a href="#how">Как работает</a>
-          <a href="#catalog">Каталог</a>
-          <a href="#business">Для магазинов</a>
-          <a href="/admin">Кабинет</a>
+          <a href="#how">{t("Как работает")}</a>
+          <a href="#catalog">{t("Каталог")}</a>
+          <a href="#business">{t("Для магазинов")}</a>
+          <a href="/admin">{t("Кабинет")}</a>
         </div>
         <a className="nav-cta" href="/onboarding">
-          Подключить магазин <span>↗</span>
+          {t("Подключить магазин")} <span>↗</span>
         </a>
       </nav>
       <section className="hero shell" id="top">
         <div className="hero-copy">
           <p className="eyebrow">
-            <i /> AR ДЛЯ МЕБЕЛЬНЫХ МАГАЗИНОВ
+            <i /> {t("AR ДЛЯ МЕБЕЛЬНЫХ МАГАЗИНОВ")}{" "}
           </p>
           <h1>
-            Мебель —<br />
-            <em>уже у вас.</em>
+            {t("Мебель —")}
+            <br />
+            <em>{t("уже у вас.")}</em>
           </h1>
           <p className="lead">
-            Покупатель открывает товар в реальном масштабе прямо из карточки магазина — с адаптацией
-            света, оттенков и контактных теней.
+            {t(
+              "Покупатель открывает товар в реальном масштабе прямо из карточки магазина — с адаптацией света, оттенков и контактных теней.",
+            )}{" "}
           </p>
           <button className="hero-cta" onClick={() => openViewer(0)}>
-            Посмотреть кресло у себя <span>↗</span>
+            {t("Посмотреть кресло у себя")} <span>↗</span>
           </button>
           <div className="hero-proof">
             <span>
-              <b>1:1</b> точный масштаб
+              <b>1:1</b> {t("точный масштаб")}{" "}
             </span>
             <span>
-              <b>0</b> приложений
+              <b>0</b> {t("приложений")}{" "}
             </span>
             <span>
               <b>iOS + Android</b>
@@ -1007,7 +1161,7 @@ export default function Home() {
         <button
           className="hero-visual"
           onClick={() => openViewer(0)}
-          aria-label="Открыть интерактивное AR-превью кресла"
+          aria-label={t("Открыть интерактивное AR-превью кресла")}
         >
           <div className="hero-room">
             <i className="hero-window" />
@@ -1015,65 +1169,77 @@ export default function Home() {
             <i className="hero-chair">
               <b />
             </i>
-            <span className="measure measure-x">84 см</span>
-            <span className="measure measure-y">76 см</span>
+            <span className="measure measure-x">{t("84 см")}</span>
+            <span className="measure measure-y">{t("76 см")}</span>
             <span className="placement-ring" />
           </div>
           <div className="visual-caption">
-            <span>Кресло Cloud · Букле</span>
-            <b>Открыть AR ↗</b>
+            <span>{t("Кресло Cloud · Букле")}</span>
+            <b>{t("Открыть AR ↗")}</b>
           </div>
         </button>
       </section>
       <section className="how shell" id="how">
-        <p className="section-label">Из карточки товара — в комнату</p>
+        <p className="section-label">{t("Из карточки товара — в комнату")}</p>
         <h2>
-          Не представляйте.
-          <br />
-          <em>Поставьте и посмотрите.</em>
+          {t("Не представляйте.")} <br />
+          <em>{t("Поставьте и посмотрите.")}</em>
         </h2>
         <div className="steps">
           <article>
             <span>01</span>
-            <h3>Нажать в магазине</h3>
-            <p>Кнопка MIRRAI находится рядом с добавлением товара в корзину.</p>
+            <h3>{t("Нажать в магазине")}</h3>
+            <p>
+              {t(
+                "Кнопка MIRRAI находится рядом с добавлением товара в корзину.",
+              )}
+            </p>
           </article>
           <article>
             <span>02</span>
-            <h3>Навести на пол</h3>
-            <p>Телефон определяет поверхность и реальный масштаб помещения.</p>
+            <h3>{t("Навести на пол")}</h3>
+            <p>
+              {t(
+                "Телефон определяет поверхность и реальный масштаб помещения.",
+              )}
+            </p>
           </article>
           <article>
             <span>03</span>
-            <h3>Принять решение</h3>
-            <p>Материалы, свет и тени помогают оценить товар до покупки.</p>
+            <h3>{t("Принять решение")}</h3>
+            <p>
+              {t("Материалы, свет и тени помогают оценить товар до покупки.")}
+            </p>
           </article>
         </div>
       </section>
       <section className="catalog-showcase shell" id="catalog">
         <div className="section-heading">
           <div>
-            <p className="section-label">Демонстрационный каталог</p>
+            <p className="section-label">{t("Демонстрационный каталог")}</p>
             <h2>
-              Четыре товара.
-              <br />
-              <em>Один клик до комнаты.</em>
+              {t("Четыре товара.")} <br />
+              <em>{t("Один клик до комнаты.")}</em>
             </h2>
           </div>
           <p>
-            Каждая карточка хранит модель, материалы и реальные габариты. В магазине эти данные
-            автоматически приходят из товарного каталога.
+            {t(
+              "Каждая карточка хранит модель, материалы и реальные габариты. В магазине эти данные автоматически приходят из товарного каталога.",
+            )}{" "}
           </p>
         </div>
         <div className="showcase-grid">
           {products.map((item, index) => (
             <button key={item.id} onClick={() => openViewer(index)}>
-              <span className="showcase-object" style={{ background: item.color }}>
+              <span
+                className="showcase-object"
+                style={{ background: item.color }}
+              >
                 <i>{index === 2 ? "◯" : index === 3 ? "▰" : "●"}</i>
               </span>
               <small>{item.category}</small>
               <strong>{item.name}</strong>
-              <em>{dimensionsLabel(item.dimensions)}</em>
+              <em>{dimensionsLabel(item.dimensions, locale)}</em>
               <b>{item.price}</b>
             </button>
           ))}
@@ -1083,45 +1249,46 @@ export default function Home() {
         <div>
           <p className="section-label">MIRRAI COMMERCE</p>
           <h2>
-            Сотни товаров.
-            <br />
-            <em>Без сотен ручных интеграций.</em>
+            {t("Сотни товаров.")} <br />
+            <em>{t("Без сотен ручных интеграций.")}</em>
           </h2>
           <a className="business-demo" href="/demo-store">
-            Посмотреть виджет в магазине <span>↗</span>
+            {t("Посмотреть виджет в магазине")} <span>↗</span>
           </a>
           <a className="business-start" href="/onboarding">
-            Подключить свой магазин →
+            {t("Подключить свой магазин →")}{" "}
           </a>
         </div>
         <div className="pipeline">
           <article>
             <b>01</b>
             <span>
-              <strong>Импорт каталога</strong>
-              <small>SKU, размеры, варианты и готовые 3D-файлы</small>
+              <strong>{t("Импорт каталога")}</strong>
+              <small>{t("SKU, размеры, варианты и готовые 3D-файлы")}</small>
             </span>
           </article>
           <article>
             <b>02</b>
             <span>
-              <strong>Подготовка моделей</strong>
-              <small>GLB + USDZ, PBR-материалы и автоматический контроль</small>
+              <strong>{t("Подготовка моделей")}</strong>
+              <small>
+                {t("GLB + USDZ, PBR-материалы и автоматический контроль")}
+              </small>
             </span>
           </article>
           <article>
             <b>03</b>
             <span>
-              <strong>Виджет и аналитика</strong>
-              <small>Запуски AR, размещения и путь до корзины</small>
+              <strong>{t("Виджет и аналитика")}</strong>
+              <small>{t("Запуски AR, размещения и путь до корзины")}</small>
             </span>
           </article>
         </div>
       </section>
       <footer className="shell">
         <span>MIRRAI © 2026</span>
-        <a href="/admin">Кабинет магазина</a>
-        <span>Мебель — в вашем пространстве.</span>
+        <a href="/admin">{t("Кабинет магазина")}</a>
+        <span>{t("Мебель — в вашем пространстве.")}</span>
       </footer>
     </main>
   );

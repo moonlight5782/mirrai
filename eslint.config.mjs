@@ -9,6 +9,11 @@ import tseslint from "typescript-eslint";
 
 const eslintConfig = defineConfig([
   globalIgnores([
+    // Local generated/tool workspaces are not application source.
+    ".mesh-tools/**",
+    ".hf-space-*/**",
+    "graphify-out/**",
+    ".vinext/**",
     ".next/**",
     "dist/**",
     ".dist-build-backup-*/**",

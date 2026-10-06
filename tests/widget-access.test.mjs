@@ -26,8 +26,29 @@ function harness(version = "2.1.0", userAgent = "desktop", maxTouchPoints = 0) {
     return { ok: true, json: async () => response };
   } };
   vm.runInNewContext(version === "2.1.0" ? source : readFileSync(new URL(`../public/mirrai-widget-${version}.js`, import.meta.url), "utf8"), context);
-  return { context, targets, requests, element, mount: () => window.MirraiWidget.mount({ shopId: "shop", sku: "ALBA", model: "/stale.glb", target: body }), nodes, set: value => { response = value; }, checks: () => checks };
+  return { context, targets, requests, element, mount: (options = {}) => window.MirraiWidget.mount({ shopId: "shop", sku: "ALBA", model: "/stale.glb", target: body, ...options }), nodes, set: value => { response = value; }, checks: () => checks };
 }
+
+for (const [locale, label] of [["ro", "Vezi la tine acasă"], ["en", "View in your room"]]) {
+  test(`SDK 2.4 forwards ${locale} to the viewer without third-party cookies`, async () => {
+    const h = harness("2.4.0");
+    const widget = h.mount({ lang: locale });
+    await tick(); widget.open(); await tick();
+    const frame = h.nodes.find(node => node.tag === "iframe");
+    assert.equal(new URL(frame.src).searchParams.get("lang"), locale);
+    assert.ok(widget.button.textContent.includes(label));
+  });
+}
+
+test("SDK 2.4 inherits the host page language and falls back for unsupported locales", async () => {
+  const h = harness("2.4.0");
+  h.context.document.documentElement = Object.assign(h.element("html"), { lang: "ro-MD" });
+  const widget = h.mount(); await tick(); widget.open(); await tick();
+  assert.equal(new URL(h.nodes.find(node => node.tag === "iframe").src).searchParams.get("lang"), "ro");
+  const other = harness("2.4.0");
+  const second = other.mount({ lang: "unsupported" }); await tick(); second.open(); await tick();
+  assert.equal(new URL(other.nodes.find(node => node.tag === "iframe").src).searchParams.get("lang"), "ru");
+});
 
 test("a supplied model still requires access, and expiry blocks the next opening", async () => {
   const h = harness(), widget = h.mount();
@@ -65,7 +86,7 @@ test("SDK 2.2 preserves the requested variant SKU when server returns its parent
 });
 
 test("compatibility SDK is identical to the new immutable release", () => {
-  assert.equal(readFileSync(new URL("../public/mirrai-widget.js", import.meta.url), "utf8"), readFileSync(new URL("../public/mirrai-widget-2.3.0.js", import.meta.url), "utf8"));
+  assert.equal(readFileSync(new URL("../public/mirrai-widget.js", import.meta.url), "utf8"), readFileSync(new URL("../public/mirrai-widget-2.4.0.js", import.meta.url), "utf8"));
 });
 
 for (const [name, ua, touch] of [["iPhone", "iPhone Safari", 1], ["Android", "Android Chrome", 1], ["iPad desktop mode", "Macintosh Safari", 5], ["Instagram", "iPhone Instagram", 1], ["Facebook", "Android FBAV", 1], ["Telegram", "Android Telegram", 1], ["X", "iPhone Twitter", 1]]) {
