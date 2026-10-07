@@ -6,6 +6,8 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "demo:build": "node scripts/build-static-demo.mjs",
+    "demo:preview": "vite preview --config static-demo/vite.config.ts --host 127.0.0.1 --port 4188",
     "verify": "npm run lint && npm run typecheck && npm test",
     "dev": "vinext dev",
     "build": "vinext build",

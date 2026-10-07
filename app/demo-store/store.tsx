@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { productNameForVariant } from "../../lib/product-label.mjs";
+import { localizeCatalogItem } from "../../lib/catalog-localization.mjs";
 import { useI18n } from "../language-provider";
 
 type CatalogVariant = {
@@ -43,6 +44,7 @@ type CatalogItem = {
   published: boolean;
 };
 type CatalogData = {
+  snapshotDate?: string;
   shop: { name: string; slug: string };
   counts: { total: number; withModel: number; published: number };
   items: CatalogItem[];
@@ -86,7 +88,17 @@ function scrollPageTop() {
   });
 }
 
-export function DemoStore() {
+// Optional adapters keep the downloadable demo independent of the SaaS API.
+// Production callers use the original endpoints and subscription-checked SDK.
+export function DemoStore({
+  catalogUrl = "/api/storefront/catalog?shop=hugge-md",
+  mountWidget,
+  neutral = false,
+}: {
+  catalogUrl?: string;
+  mountWidget?: (config: Record<string, unknown>) => WidgetInstance;
+  neutral?: boolean;
+} = {}) {
   const { t, locale } = useI18n();
 
   const [data, setData] = useState<CatalogData | null>(null);
@@ -113,10 +125,10 @@ export function DemoStore() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/storefront/catalog?shop=hugge-md", { cache: "no-store" })
+    fetch(catalogUrl, { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then((catalog: CatalogData) => {
-        setData(catalog);
+        setData({ ...catalog, items: catalog.items.map(item => localizeCatalogItem(item, locale)) });
         const requestedSku = new URLSearchParams(window.location.search).get(
           "product",
         );
@@ -133,7 +145,7 @@ export function DemoStore() {
         if (requestedProduct) requestAnimationFrame(scrollPageTop);
       })
       .catch(() => setEvent(t("Каталог временно недоступен")));
-  }, [t]);
+  }, [t, catalogUrl, locale]);
 
   const selected = useMemo(
     () =>
@@ -281,9 +293,9 @@ export function DemoStore() {
     window.addEventListener("mirrai:event", onEvent);
     let instance: WidgetInstance | undefined;
     const mount = () => {
-      instance = window.MirraiWidget?.mount({
+      instance = (mountWidget ?? window.MirraiWidget?.mount)?.({
         target: "#mirrai-demo-slot",
-        shopId: "hugge-md",
+        shopId: data?.shop.slug || "hugge-md",
         sku: selectedVariant?.sku || selected.sku,
         productId: selected.id,
         name: productName(selected, selectedVariant),
@@ -309,7 +321,7 @@ export function DemoStore() {
     let script = document.querySelector<HTMLScriptElement>(
       "script[data-mirrai-demo]",
     );
-    if (window.MirraiWidget) mount();
+    if (mountWidget || window.MirraiWidget) mount();
     else if (!script) {
       script = document.createElement("script");
       script.src = "/mirrai-widget-2.4.0.js";
@@ -323,7 +335,7 @@ export function DemoStore() {
       instance?.destroy?.();
       script?.removeEventListener("load", mount);
     };
-  }, [detailOpen, selected, selectedVariant, locale, t]);
+  }, [detailOpen, selected, selectedVariant, locale, t, mountWidget, data?.shop.slug]);
 
   function setProductUrl(sku?: string) {
     const url = new URL(window.location.href);
@@ -434,7 +446,7 @@ export function DemoStore() {
   return (
     <main className="store-demo hugge-demo">
       <div className="demo-ribbon">
-        <span>●</span> {t("Рабочая демонстрация HUGGE × MIRRAI")}{" "}
+        <span>●</span> {t(neutral ? "Демонстрационный магазин MIRRAI" : "Рабочая демонстрация HUGGE × MIRRAI")}{" "}
       </div>
       <nav className="store-nav">
         <button
@@ -445,8 +457,8 @@ export function DemoStore() {
         >
           {mobileMenuOpen ? "×" : "☰"}
         </button>
-        <a href="/demo-store?shop=hugge-md" className="store-logo">
-          HUGGE<span>.MD</span>
+        <a href={`/demo-store?lang=${locale}`} className="store-logo">
+          {neutral ? <>MIRRAI<span> / DEMO</span></> : <>HUGGE<span>.MD</span></>}
         </a>
         <div className="store-main-links">
           {categoryOrder.slice(1).map((name) => (
@@ -503,7 +515,7 @@ export function DemoStore() {
         <>
           <header className="hugge-hero">
             <div>
-              <p>{t("КАТАЛОГ HUGGE · В ДОПОЛНЕННОЙ РЕАЛЬНОСТИ")}</p>
+              <p>{t(neutral ? "МЕБЕЛЬ · В ДОПОЛНЕННОЙ РЕАЛЬНОСТИ" : "КАТАЛОГ HUGGE · В ДОПОЛНЕННОЙ РЕАЛЬНОСТИ")}</p>
               <h1>
                 {t("Мебель, которую")} <br />
                 {t("можно увидеть дома")}{" "}
@@ -519,7 +531,7 @@ export function DemoStore() {
                   onClick={() => {
                     const item =
                       data?.items.find(
-                        (product) => product.sku === "HUGGE-89990",
+                        (product) => product.sku === (neutral ? "DEMO-89990" : "HUGGE-89990"),
                       ) ?? data?.items.find((product) => product.demoAvailable);
                     if (item) openProduct(item);
                   }}
@@ -543,11 +555,11 @@ export function DemoStore() {
               </small>
             </div>
             <div className="hero-product">
-              {data?.items.find((item) => item.sku === "HUGGE-89990")
+              {data?.items.find((item) => item.sku === (neutral ? "DEMO-89990" : "HUGGE-89990"))
                 ?.images[0] && (
                 <img
                   src={
-                    data.items.find((item) => item.sku === "HUGGE-89990")!
+                    data.items.find((item) => item.sku === (neutral ? "DEMO-89990" : "HUGGE-89990"))!
                       .images[0]
                   }
                   alt={t("Кресло Alba")}
@@ -557,7 +569,7 @@ export function DemoStore() {
                 3D
                 <br />+ AR
               </span>
-              <em>{t("Кресло Alba · HUGGE-89990")}</em>
+              <em>{t(neutral ? "Кресло Alba" : "Кресло Alba · HUGGE-89990")}</em>
             </div>
           </header>
           <section className="shop-benefits">
@@ -583,7 +595,7 @@ export function DemoStore() {
                   <strong>{t("Выберите товар")}</strong>
                   <span>
                     {t(
-                      "Каталог и варианты цвета синхронизированы с магазином.",
+                      neutral ? "Демонстрационный каталог. Цены приведены для примера; покупки не оформляются." : data?.snapshotDate ? "Демонстрационный снимок каталога. Актуальные цены — на сайте магазина." : "Каталог и варианты цвета синхронизированы с магазином.",
                     )}
                   </span>
                 </div>
@@ -613,7 +625,7 @@ export function DemoStore() {
           <section className="shop-catalog">
             <header>
               <div>
-                <p>{favoritesOnly ? t("ВАШ ВЫБОР") : t("КАТАЛОГ HUGGE")}</p>
+                <p>{favoritesOnly ? t("ВАШ ВЫБОР") : t(neutral ? "Каталог" : "КАТАЛОГ HUGGE")}</p>
                 <h2>{favoritesOnly ? t("Избранное") : t("Мебель для дома")}</h2>
               </div>
               <span>
@@ -913,10 +925,10 @@ export function DemoStore() {
             <h2>{t("О товаре")}</h2>
             <p>
               {t(
-                "Оригинальный товар HUGGE из коллекции Actona. Фотографии, цена и характеристики синхронизированы с карточкой магазина; 3D-модель проходит отдельную проверку геометрии, материалов и масштаба.",
+                neutral ? "Демонстрационный каталог. Цены приведены для примера; покупки не оформляются." : data?.snapshotDate ? "Демонстрационный снимок каталога. Актуальные цены — на сайте магазина." : "Оригинальный товар HUGGE из коллекции Actona. Фотографии, цена и характеристики синхронизированы с карточкой магазина; 3D-модель проходит отдельную проверку геометрии, материалов и масштаба.",
               )}{" "}
             </p>
-            {selected.sourceUrl && (
+            {!neutral && selected.sourceUrl && (
               <a href={selected.sourceUrl} target="_blank" rel="noreferrer">
                 {t("Карточка на HUGGE ↗")}{" "}
               </a>
@@ -1066,7 +1078,7 @@ export function DemoStore() {
                     onClick={() =>
                       setCheckoutMessage(
                         t(
-                          "В рабочей интеграции покупатель перейдёт в обычное оформление заказа HUGGE.",
+                          neutral ? "Это демонстрация: заказ не создан и оплата не требуется." : "В рабочей интеграции покупатель перейдёт в обычное оформление заказа HUGGE.",
                         ),
                       )
                     }
@@ -1076,7 +1088,7 @@ export function DemoStore() {
                   {checkoutMessage && <em>{checkoutMessage}</em>}
                   <small>
                     {t(
-                      "Демонстрационная корзина. На сайте HUGGE используется штатное оформление заказа.",
+                      neutral ? "Демонстрационная корзина. Покупки и оплата недоступны." : "Демонстрационная корзина. На сайте HUGGE используется штатное оформление заказа.",
                     )}{" "}
                   </small>
                 </footer>
@@ -1104,7 +1116,7 @@ export function DemoStore() {
 
       <section className="integration-card">
         <div>
-          <p>HUGGE × MIRRAI</p>
+          <p>{neutral ? "MIRRAI / 3D + AR" : "HUGGE × MIRRAI"}</p>
           <h2>
             {t("Один каталог.")} <br />
             {t("Один AR-виджет.")}{" "}
@@ -1120,10 +1132,10 @@ export function DemoStore() {
         </div>
       </section>
       <footer className="demo-footer">
-        <b>HUGGE.MD</b>
+        <b>{neutral ? "MIRRAI / DEMO" : "HUGGE.MD"}</b>
         <span>
           {t(
-            "Концепт демонстрирует интеграцию MIRRAI и не является официальным сайтом магазина.",
+            neutral ? "Демонстрация технологии MIRRAI. Не является действующим интернет-магазином." : "Концепт демонстрирует интеграцию MIRRAI и не является официальным сайтом магазина.",
           )}{" "}
         </span>
         <a href="/">{t("Технология MIRRAI ↗")}</a>

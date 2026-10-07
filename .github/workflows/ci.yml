@@ -1,6 +1,7 @@
 name: MIRRAI CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -24,3 +25,46 @@ jobs:
       - run: npm run typecheck
       - run: python -m unittest discover -s services/reconstruction -p "test_*.py"
       - run: npm test
+
+  deploy-demos:
+    name: Deploy ${{ matrix.brand }} demo
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: pages-${{ matrix.project }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - brand: neutral
+            project: mirrai-furniture-demo
+            flags: ''
+          - brand: hugge
+            project: mirrai-hugge-demo
+            flags: '--hugge'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build public files only (no deployment secrets)
+        run: npm run demo:build -- --no-zip ${{ matrix.flags }}
+      - name: Verify branding, models and color variants
+        run: node scripts/verify-static-demo.mjs ${{ matrix.flags }}
+      - name: Publish to existing Pages project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: '3ae9240206f302b2135541e06da67251'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo '::error::Add CLOUDFLARE_API_TOKEN in repository Settings > Secrets and variables > Actions.'
+            exit 1
+          fi
+          npx --no-install wrangler pages deploy outputs/static-demo/site --project-name=${{ matrix.project }} --branch=main

@@ -8,6 +8,7 @@ import {
   previewCameraRadius,
 } from "../lib/viewer-geometry.mjs";
 import { useI18n } from "./language-provider";
+import { localizeCatalogItem } from "../lib/catalog-localization.mjs";
 
 type View = "landing" | "viewer";
 type UploadState = "idle" | "ready" | "error";
@@ -164,7 +165,11 @@ function dimensionsLabel(value: Dimensions, locale = "ru") {
   return `${value.width} × ${value.depth} × ${value.height} ${locale === "ru" ? "см" : "cm"}`;
 }
 
-export default function Home() {
+export default function Home({
+  configUrl,
+}: {
+  configUrl?: (shop: string, sku: string) => string;
+} = {}) {
   const { t, locale } = useI18n();
 
   const [view, setView] = useState<View>("landing");
@@ -198,8 +203,8 @@ export default function Home() {
   const arRef = useRef<ModelViewerElement>(null);
 
   const catalog = useMemo(
-    () => (widgetProduct ? [widgetProduct] : products),
-    [widgetProduct],
+    () => (widgetProduct ? [widgetProduct] : products).map(item => localizeCatalogItem(item, locale)) as Product[],
+    [widgetProduct, locale],
   );
   const selected = catalog[Math.min(active, catalog.length - 1)] ?? products[0];
   const selectedVariants = selected.variants ?? [];
@@ -355,7 +360,7 @@ export default function Home() {
       try {
         if (!shop || !sku) throw new Error("missing_shop");
         const response = await fetch(
-          `/api/widget/config?${new URLSearchParams({ shop, sku })}`,
+          configUrl?.(shop, sku) ?? `/api/widget/config?${new URLSearchParams({ shop, sku })}`,
           {
             cache: "no-store",
           },
@@ -385,7 +390,7 @@ export default function Home() {
       clearInterval(timer);
       window.removeEventListener("focus", check);
     };
-  }, [launcher, modelSource]);
+  }, [launcher, modelSource, configUrl]);
 
   useEffect(() => {
     if (!launcher || view !== "viewer") return;

@@ -22,6 +22,7 @@ const eslintConfig = defineConfig([
     ".tmp-hugge-previews/**",
     ".tmp-model-preview/**",
     "out/**",
+    "outputs/**",
     "build/**",
     "next-env.d.ts",
   ]),
