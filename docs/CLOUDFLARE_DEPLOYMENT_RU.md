@@ -16,19 +16,24 @@
 - Очередь генерации читает `MIRRAI_APP_ORIGIN`; пока переменная не задана,
   расписание продолжает обращаться к прежнему приложению.
 
-## Однократная настройка Cloudflare
+## Бесплатное staging-окружение
 
-Создать четыре ресурса, не используя D1 или R2 статических демо:
+Для staging используется Workers Free + D1 + KV, без оформления R2-подписки.
+Создать отдельные ресурсы, не используя D1/KV/R2 статических демо:
 
-| Среда | D1 database | R2 bucket |
+| Среда | D1 database | Object storage |
 |---|---|---|
-| staging | `mirrai-saas-staging` | `mirrai-saas-staging` |
-| production | `mirrai-saas-production` | `mirrai-saas-production` |
+| staging | `mirrai-saas-staging` | KV namespace `mirrai-saas-staging` |
+| production | `mirrai-saas-production` | R2 bucket `mirrai-saas-production` (пока не включать без отдельного решения о биллинге) |
 
-Скопировать UUID каждой D1 database. Пустая база будет заполнена миграциями из
+Скопировать UUID D1 и ID KV namespace для staging. KV бесплатного тарифа
+ограничен 1 GB storage и 25 MiB на значение; приложение ограничивает один
+загружаемый объект 24 MiB. Бесплатные квоты KV — 100 000 чтений и 1 000 записей
+в день; при превышении операции будут недоступны до сброса квоты. R2 остаётся
+целевым storage для production и больших моделей, но требует включить подписку
+с оплатой сверх бесплатного usage. Пустая D1 будет заполнена миграциями из
 `drizzle/`; существующая база приложения на прежнем хостинге автоматически не
-копируется. Перед переносом сохранённых аккаунтов/магазинов отдельно выполнить
-экспорт и импорт D1 и R2 с проверкой данных.
+копируется.
 
 Создать отдельный Cloudflare API token для Workers, не расширяя токен
 `CLOUDFLARE_API_TOKEN`, который используется Pages-демо. Токену нужны только
@@ -42,7 +47,9 @@ Worker secrets; доступ к остальным аккаунтам не ну�
 
 - `CLOUDFLARE_ACCOUNT_ID` — аккаунт MIRRAI;
 - `MIRRAI_D1_DATABASE_ID` — UUID соответствующей D1;
-- `MIRRAI_R2_BUCKET_NAME` — bucket с именем среды из таблицы;
+- `MIRRAI_STORAGE_MODE` — `kv` для бесплатного staging;
+- `MIRRAI_KV_NAMESPACE_ID` — ID KV namespace staging;
+- `MIRRAI_R2_BUCKET_NAME` — только для R2 окружения;
 - `MIRRAI_APP_ORIGIN` — канонический HTTPS origin Worker или домена;
 - `MIRRAI_OPERATOR_EMAIL` — почта владельца платформы, с которой он войдёт;
 - `MAIL_FROM` — подтверждённый отправитель писем.
@@ -63,7 +70,7 @@ Worker secrets; доступ к остальным аккаунтам не ну�
 
 ## Первый staging запуск
 
-После создания ресурсов и GitHub Environments открыть Actions → **Deploy MIRRAI
+После создания ресурсов и GitHub Environment открыть Actions → **Deploy MIRRAI
 SaaS** → Run workflow → выбрать `staging`. После завершения проверить вход,
 подтверждение почты, восстановление пароля, создание магазина, загрузку файла,
 изоляцию магазина, установку виджета и события. `MIRRAI_APP_ORIGIN` в настройках
@@ -78,8 +85,9 @@ Production запускается вручную тем же workflow с `produc
 
 ## Текущие ограничения
 
-- Этот workflow пока не запускался: Cloudflare CLI в рабочей среде не
-  авторизован, а D1/R2 ресурсы и GitHub Environments ещё не настроены.
+- Этот workflow пока не запускался: staging D1/KV и базовые GitHub variables
+  созданы. Нужны deploy-токен, почтовый provider/секреты, `MIRRAI_OPERATOR_EMAIL`
+  и `MAIL_FROM`.
 - База, загрузки, пользователи и секреты предыдущего размещения не переносятся
   автоматически.
 - Google OAuth, письма и оплата подтверждаются только после подключения реальных

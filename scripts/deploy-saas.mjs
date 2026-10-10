@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const target = process.env.MIRRAI_DEPLOY_ENV;
 const targets = {
-  staging: { worker: "mirrai-saas-staging", database: "mirrai-saas-staging", bucket: "mirrai-saas-staging" },
+  staging: { worker: "mirrai-saas-staging", database: "mirrai-saas-staging", storage: "kv" },
   production: { worker: "mirrai-saas", database: "mirrai-saas-production", bucket: "mirrai-saas-production" },
 };
 
@@ -19,13 +19,18 @@ const selected = targets[target];
 if (!selected) fail("Set MIRRAI_DEPLOY_ENV to staging or production.");
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const databaseId = process.env.MIRRAI_D1_DATABASE_ID;
+const storageMode = process.env.MIRRAI_STORAGE_MODE || selected.storage || "r2";
+const kvNamespaceId = process.env.MIRRAI_KV_NAMESPACE_ID;
 const bucketName = process.env.MIRRAI_R2_BUCKET_NAME;
 const appOrigin = process.env.MIRRAI_APP_ORIGIN;
 const operatorEmail = process.env.MIRRAI_OPERATOR_EMAIL?.trim().toLowerCase();
 if (!process.env.CLOUDFLARE_API_TOKEN) fail("CLOUDFLARE_API_TOKEN is not configured.");
 if (!/^[a-f0-9]{32}$/i.test(accountId ?? "")) fail("CLOUDFLARE_ACCOUNT_ID must be a 32-character account ID.");
 if (!/^[a-f0-9-]{36}$/i.test(databaseId ?? "")) fail("MIRRAI_D1_DATABASE_ID must be a D1 database UUID.");
-if (bucketName !== selected.bucket) fail(`MIRRAI_R2_BUCKET_NAME must equal ${selected.bucket} for ${target}.`);
+if (storageMode !== "kv" && storageMode !== "r2") fail("MIRRAI_STORAGE_MODE must be kv or r2.");
+if (target === "staging" && storageMode !== "kv") fail("Free staging is configured for KV; use MIRRAI_STORAGE_MODE=kv.");
+if (storageMode === "kv" && !/^[a-f0-9]{32}$/i.test(kvNamespaceId ?? "")) fail("MIRRAI_KV_NAMESPACE_ID must be a 32-character KV namespace ID.");
+if (storageMode === "r2" && bucketName !== selected.bucket) fail(`MIRRAI_R2_BUCKET_NAME must equal ${selected.bucket} for ${target}.`);
 if (!appOrigin) fail("MIRRAI_APP_ORIGIN must be set to this deployment's canonical HTTPS origin.");
 try {
   const parsed = new URL(appOrigin);
@@ -46,7 +51,9 @@ const config = {
   main: "./worker/index.ts",
   assets: { directory: "dist/client", binding: "ASSETS", not_found_handling: "none" },
   d1_databases: [{ binding: "DB", database_name: selected.database, database_id: databaseId, migrations_dir: "drizzle" }],
-  r2_buckets: [{ binding: "UPLOADS", bucket_name: bucketName }],
+  ...(storageMode === "kv"
+    ? { kv_namespaces: [{ binding: "UPLOADS_KV", id: kvNamespaceId }] }
+    : { r2_buckets: [{ binding: "UPLOADS", bucket_name: bucketName }] }),
   workers_dev: true,
   observability: { enabled: true, logs: { enabled: true, head_sampling_rate: 1 } },
   vars: {

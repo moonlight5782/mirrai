@@ -12,14 +12,15 @@ export async function POST(request: Request) {
   const access = await authorizedShop(user, shopSlug, "catalog:write"); if (!access) return Response.json({ error: "forbidden" }, { status: 403 });
   const [product] = await getDb().select({ id: products.id }).from(products).where(and(eq(products.id, productId), eq(products.shopId, access.shop.id))).limit(1);
   const isImage = kind === "photo";
-  const maxSize = isImage ? 12_000_000 : 50_000_000;
+  const storage = getUploadsBucket();
+  const maxSize = Math.min(isImage ? 12_000_000 : 50_000_000, storage.maxObjectSize ?? Number.POSITIVE_INFINITY);
   if (!product || !(file instanceof File) || file.size < 100 || file.size > maxSize || !new Set(["glb", "usdz", "photo"]).has(kind)) return Response.json({ error: "invalid_asset" }, { status: 400 });
   const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
   const validation = validateAssetHeader(file, kind, header);
   if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 });
   const { extension, contentType } = validation;
   const id = crypto.randomUUID(); const storageKey = `shops/${access.shop.id}/products/${product.id}/${id}.${extension}`;
-  await getUploadsBucket().put(storageKey, file.stream(), { httpMetadata: { contentType } });
+  await storage.put(storageKey, file.stream(), { httpMetadata: { contentType } });
   await getDb().insert(assets).values({ id, shopId: access.shop.id, productId: product.id, storageKey, fileName: file.name.slice(0, 240), contentType, sizeBytes: file.size, kind });
   const url = `/api/assets/${id}`;
   if (isImage) {
