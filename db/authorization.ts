@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from ".";
+import { env } from "cloudflare:workers";
 import { platformOperators, shopMembers, shops } from "./schema";
 import { hasRolePermission, membershipAllowsShop } from "./authorization-policy.mjs";
 
@@ -37,6 +38,13 @@ export async function isPlatformOperator(identity: Identity) {
   if (existing) return true;
   if (!identity.emailVerified) return false;
   const normalizedEmail = identity.email.trim().toLowerCase();
+  const bootstrapEmail = typeof env.MIRRAI_OPERATOR_EMAIL === "string"
+    ? env.MIRRAI_OPERATOR_EMAIL.trim().toLowerCase()
+    : "";
+  if (bootstrapEmail && normalizedEmail === bootstrapEmail) {
+    await db.insert(platformOperators).values({ userId: identity.userId, email: normalizedEmail }).onConflictDoNothing();
+    return true;
+  }
   const [emailMatch] = await db.select().from(platformOperators).where(eq(platformOperators.email, normalizedEmail)).limit(1);
   if (emailMatch) {
     await db.insert(platformOperators).values({ userId: identity.userId, email: normalizedEmail }).onConflictDoNothing();

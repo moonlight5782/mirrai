@@ -4,6 +4,8 @@
 
 Подробная схема компонентов, потоков данных, установки виджета и границ готовности к production описана в [`docs/ARCHITECTURE_RU.md`](docs/ARCHITECTURE_RU.md).
 
+План выпуска SaaS и настройка Cloudflare staging/production: [`docs/SAAS_V1_ROADMAP_RU.md`](docs/SAAS_V1_ROADMAP_RU.md), [`docs/CLOUDFLARE_DEPLOYMENT_RU.md`](docs/CLOUDFLARE_DEPLOYMENT_RU.md).
+
 MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product from an online-store card and places it in their room at real scale without installing an app.
 
 ## Included

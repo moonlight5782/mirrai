@@ -8,6 +8,7 @@
   "scripts": {
     "demo:build": "node scripts/build-static-demo.mjs",
     "demo:preview": "vite preview --config static-demo/vite.config.ts --host 127.0.0.1 --port 4188",
+    "deploy:saas": "node scripts/deploy-saas.mjs",
     "verify": "npm run lint && npm run typecheck && npm test",
     "dev": "vinext dev",
     "build": "vinext build",
@@ -43,6 +44,7 @@
     "@types/react-dom": "19.2.3",
     "@types/three": "^0.172.0",
     "@types/webxr": "^0.5.23",
+    "@vinext/cloudflare": "1.0.0-beta.2",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
     "drizzle-kit": "0.31.10",

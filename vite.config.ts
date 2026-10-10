@@ -7,6 +7,7 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
 const { d1, r2 } = hostingConfig;
+const cloudflareDeploy = process.env.MIRRAI_DEPLOY_TARGET === "cloudflare";
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
@@ -49,10 +50,14 @@ export default defineConfig(async () => {
       : undefined,
     plugins: [
       vinext(),
-      sites(),
+      // Sites remains the default host for existing deployments. The Worker
+      // deploy command opts out so its artifact is not wrapped as a Sites bundle.
+      ...(cloudflareDeploy ? [] : [sites()]),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-        config: localBindingConfig,
+        ...(cloudflareDeploy
+          ? { configPath: "./wrangler.jsonc" }
+          : { config: localBindingConfig }),
       }),
     ],
   };
