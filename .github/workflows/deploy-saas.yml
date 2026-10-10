@@ -2,20 +2,12 @@ name: Deploy MIRRAI SaaS
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Cloudflare Worker environment
-        required: true
-        type: choice
-        options:
-          - staging
-          - production
 
 permissions:
   contents: read
 
 concurrency:
-  group: mirrai-saas-${{ inputs.environment }}
+  group: mirrai-saas-staging
   cancel-in-progress: false
 
 jobs:
@@ -40,9 +32,9 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: mirrai-${{ inputs.environment }}
+    environment: mirrai-staging
     env:
-      MIRRAI_DEPLOY_ENV: ${{ inputs.environment }}
+      MIRRAI_DEPLOY_ENV: staging
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       MIRRAI_D1_DATABASE_ID: ${{ vars.MIRRAI_D1_DATABASE_ID }}
