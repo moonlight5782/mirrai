@@ -6,7 +6,16 @@
 
 План выпуска SaaS и настройка Cloudflare staging/production: [`docs/SAAS_V1_ROADMAP_RU.md`](docs/SAAS_V1_ROADMAP_RU.md), [`docs/CLOUDFLARE_DEPLOYMENT_RU.md`](docs/CLOUDFLARE_DEPLOYMENT_RU.md).
 
-MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product from an online-store card and places it in their room at real scale without installing an app.
+Статус запуска: доступны два **статических демо-каталога**, а backend SaaS Worker
+ещё не опубликован. Регистрация магазинов, кабинет, загрузка и аналитика пока не
+доступны на публичном MIRRAI SaaS-адресе. Для предметного разговора с магазином
+и границ ручного пилота см. [`docs/SALES_PIPELINE.md`](docs/SALES_PIPELINE.md).
+
+- Нейтральное демо: https://mirrai-furniture-demo.pages.dev/
+- Персональное демо HUGGE: https://mirrai-hugge-demo.pages.dev/ (показывать HUGGE).
+
+MIRRAI is a furniture-first AR commerce prototype. The live demos are static
+catalogues; the SaaS backend is present in the codebase but not yet deployed.
 
 ## Included
 
@@ -25,7 +34,7 @@ MIRRAI is a furniture-first AR commerce prototype. A shopper opens a product fro
 - server-side widget event collection;
 - multi-store memberships, operator client management and expiring one-time invitation links;
 - CSV catalog import with a downloadable template;
-- first-party GLB/USDZ uploads stored in R2;
+- first-party GLB/USDZ uploads supported by R2 for production and KV for free staging;
 - 30-day AR funnel analytics per store and product;
 - versioned SDK 2.4.0 batch configuration, mobile inline AR launcher, one shared desktop modal and dynamic-page observation;
 - responsive Russian-language interface and Cloudflare-compatible Sites build.
@@ -44,7 +53,7 @@ Camera-based AR requires HTTPS or localhost.
 
 ## Store widget
 
-Open the deployed MIRRAI page in an iframe or a new mobile tab and pass product data:
+After the SaaS Worker is deployed, open its viewer in an iframe or a new mobile tab and pass product data:
 
 ```text
 ?widget=1
@@ -70,7 +79,7 @@ The versioned pilot SDK is available at `/mirrai-widget-2.4.0.js`; `/mirrai-widg
 
 ```html
 <div id="mirrai-slot"></div>
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.4.0.js" data-auto="false"></script>
+<script src="https://<your-MIRRAI-domain>/mirrai-widget-2.4.0.js" data-auto="false"></script>
 <script>
   MirraiWidget.mount({
     target: "#mirrai-slot",
@@ -96,7 +105,7 @@ The SDK requests `/api/widget/config`, and the button appears only when the subs
 For a full-store installation, add the script once and mark each product-card slot with its SKU. The SDK scans all matching slots automatically:
 
 ```html
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.4.0.js" data-shop-id="nordform" data-auto="scan" defer></script>
+<script src="https://<your-MIRRAI-domain>/mirrai-widget-2.4.0.js" data-shop-id="nordform" data-auto="scan" defer></script>
 <div data-mirrai-sku="CLOUD-001"></div>
 ```
 
@@ -114,7 +123,10 @@ The SDK reports its first valid load to the setup wizard, so a store owner can v
 - `/admin/setup?shop=SHOP_ID` configures the allowed domain and produces the integration snippet.
 - `/admin/analytics?shop=SHOP_ID` shows the 30-day funnel from widget open to AR placement.
 
-Uploaded binaries are stored in the `UPLOADS` R2 binding and served through immutable asset URLs. The public SDK batches up to 100 SKU configurations per request and watches dynamically rendered product cards.
+Uploaded binaries use the configured object-storage binding (`UPLOADS_KV` in free
+staging; `UPLOADS` R2 is reserved for production) and are served through
+immutable asset URLs. The public SDK batches up to 100 SKU configurations per
+request and watches dynamically rendered product cards.
 
 Invitations are not accepted from an email match alone. MIRRAI creates a random single-use link that expires after seven days; accepting it verifies the invited account and binds its role to one store. API routes enforce the same permissions independently of the visible navigation. Only a platform operator can list all clients, publish reviewed models or operate another store.
 
@@ -125,7 +137,7 @@ The first merchant pilot is provisioned as `hugge-md`. MIRRAI imports furniture 
 For OpenCart product pages, the SDK can locate the UltraStore product code and insert its AR launcher without per-product markup:
 
 ```html
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.4.0.js" data-shop-id="hugge-md" data-auto="product" data-sku-prefix="HUGGE-" defer></script>
+<script src="https://<your-MIRRAI-domain>/mirrai-widget-2.4.0.js" data-shop-id="hugge-md" data-auto="product" data-sku-prefix="HUGGE-" defer></script>
 ```
 
 As of 28 August 2026, `hugge.md` serves an expired TLS certificate. The pilot remains marked `blocked` for automatic sync and installation until the merchant renews HTTPS; the already imported catalog is preserved.

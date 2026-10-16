@@ -2,9 +2,12 @@
 
 Начните здесь, затем откройте [архитектуру](ARCHITECTURE_RU.md),
 [эксплуатационный справочник](PROJECT_RUNBOOK_RU.md) и
-[сценарии AR на разных платформах](AR_CUSTOMER_FLOW.md).
-Это React/TypeScript-приложение с файловыми маршрутами Vinext, а не обычный
-Node-сервер: production исполняется в Cloudflare Workers, данные — в D1 и R2.
+[сценарии AR на разных платформах](AR_CUSTOMER_FLOW.md) и
+[план первых магазинов](SALES_PIPELINE.md). Это React/TypeScript-приложение с
+файловыми маршрутами Vinext, а не обычный Node-сервер. Публично развернуты только
+статические Cloudflare Pages демо; SaaS Worker ещё не опубликован. Целевое
+staging использует D1 и KV, production R2 пока не активирован. См.
+[статус развертывания](CLOUDFLARE_DEPLOYMENT_RU.md).
 
 ## Запуск и проверка
 
@@ -57,7 +60,7 @@ production-сборку и Node-тесты. Успешный build сам по �
 | Подсказка Safari/Chrome, распознавание встроенного браузера | `lib/ar-platform.mjs` |
 | Каталог HUGGE, карточка, цвета, фотогалерея | `app/demo-store/store.tsx` |
 | Публичный каталог и доступность моделей | `app/api/storefront/catalog/route.ts` |
-| Скрипт магазина, поиск SKU, iframe, события | `public/mirrai-widget-2.3.0.js` |
+| Скрипт магазина, поиск SKU, iframe, события | `public/mirrai-widget-2.4.0.js` |
 | Проверка домена, подписки, товара | `app/api/widget/bootstrap/route.ts`, `app/api/widget/config/route.ts`, `app/api/widget/cors.ts` |
 | Учёт событий и статистика | `app/api/widget/events/route.ts`, `app/api/admin/analytics/route.ts` |
 | Магазины и права участников | `db/authorization.ts`, `db/authorization-policy.mjs`, `app/api/admin/clients/route.ts` |

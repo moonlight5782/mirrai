@@ -4,19 +4,26 @@
 
 ## Честный статус продукта
 
-MIRRAI сейчас является рабочим пилотным SaaS: регистрация, изоляция магазинов, каталог, загрузка файлов, очередь генерации, ручная публикация, виджет, 3D/AR и аналитика реализованы. Виджет можно установить одной вставкой и безопасно использовать без секретного ключа в браузере.
+Публично доступны два статических каталога-демо на Cloudflare Pages. SaaS
+приложение, кабинет владельца, API, tenant isolation, загрузки, события,
+админские страницы и очередь генерации реализованы в коде и проходят локальные
+проверки, но Cloudflare Worker ещё не опубликован. Поэтому публичная регистрация,
+магазинный кабинет, серверная аналитика, загрузка моделей и установка виджета на
+реальный сайт сейчас не доступны. Статическое демо — не работающий multi-tenant
+SaaS и не доказательство интеграции в чужую тему.
 
-До полностью автономного массового SaaS не хватает:
+Для первого staging подготовлены отдельные Cloudflare D1 и KV, а GitHub Actions
+workflow может выполнить проверку, применить миграции и опубликовать Worker.
+Остаются Cloudflare deploy-secret, Resend sender/key и email владельца платформы;
+workflow не запускался. Оплата, checkout и webhook платежей не реализованы.
+Google OAuth требует credentials. Подробный фактический статус — в
+[`CLOUDFLARE_DEPLOYMENT_RU.md`](CLOUDFLARE_DEPLOYMENT_RU.md) и
+[`SAAS_V1_ROADMAP_RU.md`](SAAS_V1_ROADMAP_RU.md).
 
-1. платёжного провайдера, checkout и webhook-событий продления/отмены;
-2. постоянного GPU-провайдера с договорным SLA;
-3. мониторинга ошибок, uptime-проверок и оповещений;
-4. восстановления пароля и подтверждения email;
-5. подписанных viewer-сессий, если потребуется мгновенно отзывать уже известные URL моделей;
-6. реальных E2E-проверок на Shopify, WooCommerce, OpenCart и Tilda с несколькими темами;
-7. автоматических тестов на физических iPhone/Android — браузерные тесты не доказывают качество нативного AR.
-
-Поэтому текущая правильная коммерческая модель — управляемый пилот: MIRRAI подключает первый магазин, проверяет его тему, модели и AR, а не обещает полностью самостоятельную установку для любого сайта.
+До staging и испытания конкретной темы коммерчески допустим только разговор о
+дизайн-партнёрстве и просмотр статического демо. После выкладки надо вручную
+проверить весь путь и конкретные iPhone/Android устройства, прежде чем
+обещать магазину live-интеграцию или коммерческий SLA.
 
 ## Общая схема
 
@@ -35,15 +42,15 @@ flowchart LR
     subscription --> db
 
     catalog --> upload[Загрузка фото, GLB или USDZ]
-    upload --> r2[(R2: файлы магазина)]
+    upload --> storage[(KV в бесплатном staging / R2 после отдельного решения)]
     upload --> queue[Очередь generation_jobs]
     queue --> gpu[Hunyuan3D / собственный gateway]
     gpu --> review[Ручная QA: геометрия, текстуры, масштаб]
     review --> publish[Статус published]
     publish --> db
-    publish --> r2
+    publish --> storage
 
-    store[Сайт магазина] --> sdk[mirrai-widget-2.3.0.js]
+    store[Сайт магазина] --> sdk[mirrai-widget-2.4.0.js]
     sdk --> bootstrap[/api/widget/bootstrap]
     bootstrap --> db
     sdk --> detect[Определение платформы и SKU]
@@ -68,7 +75,7 @@ flowchart LR
 Владелец открывает `/admin/setup`, указывает домен и платформу и получает:
 
 ```html
-<script src="https://mirrai-try-on.moonlight-5782.chatgpt.site/mirrai-widget-2.3.0.js"
+<script src="https://<your-MIRRAI-domain>/mirrai-widget-2.4.0.js"
         data-auto="universal"
         defer></script>
 ```
@@ -252,24 +259,27 @@ erDiagram
 ```
 
 - D1: аккаунты, сессии, магазины, роли, товары, варианты, модели, задания и события.
-- R2: загруженные фотографии, GLB и USDZ.
+- Storage: KV используется для ограниченного бесплатного staging; R2 — целевой
+  storage для production после отдельного согласия на тарификацию. Старые данные
+  автоматически не переносятся.
 - `public/catalog`: проверенные модели рабочего демо HUGGE.
-- Sites: production worker, статические файлы, D1/R2 bindings.
+- Cloudflare Pages: публичные статические демо.
+- Cloudflare Worker: backend SaaS целевого staging; ещё не развернут.
 
 ## Ответственность компонентов
 
 | Компонент | Отвечает за | Не отвечает за |
 |---|---|---|
-| `public/mirrai-widget-2.3.0.js` | поиск SKU, вставку кнопки, открытие viewer, отправку событий | право доступа и решение о публикации |
+| `public/mirrai-widget-2.4.0.js` | поиск SKU, вставку кнопки, открытие viewer, отправку событий | право доступа и решение о публикации |
 | `/api/widget/bootstrap` | поиск магазина по домену | поиск товара |
 | `/api/widget/config` | домен, подписка, SKU, вариант и published-модель | генерацию модели |
 | `/api/widget/events` | проверенную запись событий | биллинг |
-| `app/auth.ts` | пароль, cookie-сессия, текущий пользователь | OAuth Google и password reset |
+| `app/auth.ts` | пароль, cookie-сессия, текущий пользователь | доставка писем и credentials Google OAuth |
 | `db/authorization.ts` | tenant isolation и роли | оплату |
 | `db/subscription.mjs` | fail-closed проверку срока | списание денег |
 | `/api/admin/catalog*` | товары, варианты и импорт | качество 3D |
 | `/api/admin/generation` | очередь и связь с GPU | автоматическую публикацию |
-| `/api/admin/assets` и R2 | приём и хранение файлов | проверку визуального сходства |
+| `/api/admin/assets` и storage adapter | приём и хранение файлов | проверку визуального сходства |
 | `<model-viewer>` | 3D-preview и переход в нативный AR | создание геометрии |
 
 ## Аналитика
@@ -293,7 +303,7 @@ SDK отправляет `widget_open`, `model_ready`, `ar_open`, `object_placed
 
 ## Что защищает от поломок сейчас
 
-- versioned SDK `2.2.0`; совместимый URL сохранён отдельно;
+- versioned SDK `2.4.0`; совместимый URL сохранён отдельно;
 - fail-closed доступ: сеть, подписка и домен не дают открыть старую модель;
 - IP-wide и per-shop rate limits;
 - проверка сигнатуры GLB, USDZ и изображений;
@@ -328,7 +338,7 @@ SDK отправляет `widget_open`, `model_ready`, `ar_open`, `object_placed
 
 ## Где искать неисправность
 
-- Кнопка и распознавание страницы: `public/mirrai-widget-2.3.0.js`.
+- Кнопка и распознавание страницы: `public/mirrai-widget-2.4.0.js`.
 - Домен/CORS: `app/api/widget/cors.ts`, `bootstrap/route.ts`.
 - Товар/вариант/подписка: `app/api/widget/config/route.ts`.
 - Viewer и AR: `app/page.tsx`.

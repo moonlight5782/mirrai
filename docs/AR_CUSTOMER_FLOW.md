@@ -1,4 +1,4 @@
-# Customer AR flow (SDK 2.3.0)
+# Customer AR flow (SDK 2.4.0)
 
 The service-owned `hugge-md` presentation catalogue has explicit non-expiring
 demo access in `db/subscription.mjs`. Manual suspension still disables it.
@@ -40,4 +40,5 @@ Before claiming a specific app is supported, manually open a published product
 on iPhone Safari and Android Chrome, then from Telegram/Instagram/Facebook/X.
 Check permission denied, return from AR, switching colors, poor network, and a
 device without AR support. Old immutable SDKs remain unchanged; installation
-instructions now use 2.3.0.
+instructions now use 2.4.0. This describes the SDK code, not a live SaaS
+deployment; validate the actual store theme and target devices in a pilot.
