@@ -10,15 +10,23 @@ import { normalizedWebsite } from "../../../../lib/shop-onboarding.mjs";
 import { rateLimitPolicy, rateLimitHeaders } from "../../../../lib/rate-limit";
 
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
-export async function GET() {
+export async function GET(request?: Request) {
   const user = await getCurrentUser(); if (!user) return reply({ error: "authentication_required" }, 401);
   const operator = await isPlatformOperator(user), db = getDb();
+  const shopSlug = new URL(request?.url ?? "https://mirrai.invalid/api/admin/commerce").searchParams.get("shop");
+  let selectedShop: { slug: string; name: string; websiteUrl: string } | null = null;
+  if (shopSlug) {
+    const access = await authorizedShop(user, shopSlug, "setup:write");
+    if (!access) return reply({ error: "forbidden" }, 403);
+    if (!access.shop.slug || !access.shop.name || !access.shop.websiteUrl) return reply({ error: "shop_incomplete" }, 409);
+    selectedShop = { slug: access.shop.slug, name: access.shop.name, websiteUrl: access.shop.websiteUrl };
+  }
   const [pricing] = await db.select().from(commercePricing).where(eq(commercePricing.id, 1));
   const rows = await db.select({ request: merchantRequests, email: authUsers.email, shopSlug: shops.slug }).from(merchantRequests)
     .innerJoin(authUsers, eq(merchantRequests.userId, authUsers.id))
     .leftJoin(shops, eq(merchantRequests.shopId, shops.id))
     .where(operator ? undefined : eq(merchantRequests.userId, user.userId)).orderBy(desc(merchantRequests.createdAt)).limit(100);
-  return reply({ operator, pricing: pricing ?? null, items: rows.map(({ request, email, shopSlug }) => ({ ...request, shopSlug, quote: JSON.parse(request.quoteJson), email: operator ? email : undefined })), paymentAvailable: false });
+  return reply({ operator, pricing: pricing ?? null, items: rows.map(({ request, email, shopSlug }) => ({ ...request, shopSlug, quote: JSON.parse(request.quoteJson), email: operator ? email : undefined })), shop: selectedShop, paymentAvailable: false });
 }
 
 export async function POST(request: Request) {

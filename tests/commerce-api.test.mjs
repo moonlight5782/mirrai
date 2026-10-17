@@ -39,14 +39,18 @@ function fixture(t) {
     if (name.endsWith("/auth")) return { getCurrentUser: async () => user };
     if (name.endsWith("/db")) return { getDb: () => db };
     if (name.endsWith("/db/schema")) return schema;
-    if (name.endsWith("/db/authorization")) return { isPlatformOperator: async () => operator, authorizedShop: async () => null };
+    if (name.endsWith("/db/authorization")) return { isPlatformOperator: async () => operator, authorizedShop: async (identity, slug) => {
+      if (slug !== "store" || (identity.userId !== "a" && !operator)) return null;
+      const shop = sqlite.prepare("SELECT id,slug,name,website_url websiteUrl FROM shops WHERE slug=?").get(slug);
+      return shop ? { shop, role: operator ? "operator" : "owner" } : null;
+    } };
     if (name.endsWith("commerce-quote.mjs")) return quote;
     if (name.endsWith("shop-onboarding.mjs")) return onboarding;
     if (name.endsWith("/rate-limit")) return { rateLimitPolicy: async () => ({ allowed: true }) };
     throw new Error(name);
   });
   const post = body => route.POST(new Request("https://mirrai.test/api/admin/commerce", { method: "POST", headers: { origin: "https://mirrai.test", "content-type": "application/json" }, body: JSON.stringify(body) }));
-  return { sqlite, route, post, identity(id, isOperator = false) { user = { userId: id, email: `${id}@example.test` }; operator = isOperator; } };
+  return { sqlite, route, post, identity(id, isOperator = false) { user = { userId: id, email: `${id}@example.test` }; operator = isOperator; }, async addShop() { sqlite.prepare("INSERT INTO shops (slug,name,website_url,allowed_domains,owner_user_id,subscription_status,trial_ends_at,plan,installation_status) VALUES (?,?,?,?,?,?,?,?,?)").run("store", "Store", "https://store.example", '["store.example"]', "a", "trial", "2030-01-01T00:00:00.000Z", "pilot", "waiting"); } };
 }
 test("commerce API isolates requests, rejects merchant pricing edits, and snapshots server prices", async t => {
   const h = fixture(t), rates = { action: "pricing", revision: 0, monthlyMinor: 10000, suppliedModelMinor: 2000, generatedModelMinor: 12000 };
@@ -63,6 +67,18 @@ test("commerce API isolates requests, rejects merchant pricing edits, and snapsh
   assert.equal((await (await h.route.GET()).json()).items[0].quote.firstPeriodMinor, 26000);
   h.identity("b"); assert.equal((await h.post({ ...payload, id: crypto.randomUUID() })).status, 409);
   assert.equal((await h.post({ ...payload, id: crypto.randomUUID(), pricingRevision: 2, shop: "other-shop" })).status, 403);
+});
+
+test("a merchant quote stays linked to its selected store and cannot select another store", async t => {
+  const h = fixture(t); await h.addShop();
+  const payload = { action: "request", id: crypto.randomUUID(), name: "Store", websiteUrl: "https://store.example", suppliedCount: 1, generatedCount: 1, pricingRevision: 0, shop: "store" };
+  assert.equal((await h.post(payload)).status, 201);
+  const selected = await (await h.route.GET(new Request("https://mirrai.test/api/admin/commerce?shop=store"))).json();
+  assert.equal(selected.shop.slug, "store");
+  assert.equal(selected.items[0].shopSlug, "store");
+  h.identity("b");
+  assert.equal((await h.route.GET(new Request("https://mirrai.test/api/admin/commerce?shop=store"))).status, 403);
+  assert.equal((await h.post({ ...payload, id: crypto.randomUUID() })).status, 403);
 });
 
 test("only operator provisions a requested store; ownership is atomic and retries do not duplicate", async t => {

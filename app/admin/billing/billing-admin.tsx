@@ -30,7 +30,7 @@ type Item = {
   quote: Quote;
   createdAt: string;
 };
-type Data = { operator: boolean; pricing: Pricing | null; items: Item[] };
+type Data = { operator: boolean; pricing: Pricing | null; items: Item[]; shop: { slug: string; name: string; websiteUrl: string } | null };
 const money = (value?: number) =>
   value === undefined
     ? "Требуется расчёт"
@@ -65,7 +65,7 @@ function QuoteSummary({ quote }: { quote: Quote }) {
   );
 }
 
-export function BillingAdmin({ displayName }: { displayName: string }) {
+export function BillingAdmin({ displayName, returnTo }: { displayName: string; returnTo: string }) {
   const { t } = useI18n();
 
   const [data, setData] = useState<Data | null>(null),
@@ -77,7 +77,7 @@ export function BillingAdmin({ displayName }: { displayName: string }) {
   const requestId = useRef("");
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/admin/commerce", {
+      const response = await fetch(`/api/admin/commerce${returnTo.includes("?") ? returnTo.slice(returnTo.indexOf("?")) : ""}`, {
         cache: "no-store",
       });
       if (!response.ok) throw new Error();
@@ -87,7 +87,7 @@ export function BillingAdmin({ displayName }: { displayName: string }) {
         t("Не удалось загрузить заявки. Проверьте соединение и повторите."),
       );
     }
-  }, [t]);
+  }, [returnTo, t]);
   useEffect(() => {
     queueMicrotask(() => void load());
   }, [load]);
@@ -154,6 +154,7 @@ export function BillingAdmin({ displayName }: { displayName: string }) {
         suppliedCount: supplied,
         generatedCount: generated,
         pricingRevision: data?.pricing?.revision ?? 0,
+        ...(data?.shop ? { shop: data.shop.slug } : {}),
       })
     )
       requestId.current = "";
@@ -267,25 +268,15 @@ export function BillingAdmin({ displayName }: { displayName: string }) {
                 className="billing-panel billing-form"
                 onSubmit={submitRequest}
               >
-                <h2>{t("Запросить подключение магазина")}</h2>
+                <h2>{data.shop ? t("Запросить работы для магазина") : t("Запросить подключение магазина")}</h2>
                 <p>
                   {t(
-                    "Можно отправить заявку на ещё один магазин. Отправка не включает подписку и не запускает платную генерацию.",
+                    data.shop
+                      ? "Заявка будет привязана к выбранному магазину. Это запрос на расчёт: подписка не активируется и деньги не списываются."
+                      : "Можно отправить заявку на ещё один магазин. Отправка не включает подписку и не запускает платную генерацию.",
                   )}
                 </p>
-                <label>
-                  {t("Название магазина")}
-                  <input name="name" required maxLength={100} />
-                </label>
-                <label>
-                  {t("Адрес сайта")}
-                  <input
-                    name="websiteUrl"
-                    type="url"
-                    required
-                    placeholder="https://store.md"
-                  />
-                </label>
+                {data.shop ? <><p><strong>{data.shop.name}</strong><br/><a href={data.shop.websiteUrl}>{data.shop.websiteUrl}</a></p><input type="hidden" name="name" value={data.shop.name}/><input type="hidden" name="websiteUrl" value={data.shop.websiteUrl}/></> : <><label>{t("Название магазина")}<input name="name" required maxLength={100} /></label><label>{t("Адрес сайта")}<input name="websiteUrl" type="url" required placeholder="https://store.md" /></label></>}
                 <label>
                   {t("Сколько готовых 3D-моделей")}
                   <input

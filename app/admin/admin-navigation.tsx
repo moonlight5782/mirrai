@@ -149,7 +149,7 @@ export function AdminNavigation({
         </a>
         <a
           className={active === "billing" ? "active" : ""}
-          href="/admin/billing"
+          href={withShop("/admin/billing", shopSlug)}
         >
           {operator ? t("Тарифы и заявки") : t("Заявки и расчёт")}
         </a>
