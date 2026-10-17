@@ -2,6 +2,8 @@
 
 Новому разработчику: [`docs/DEVELOPER_GUIDE_RU.md`](docs/DEVELOPER_GUIDE_RU.md) — запуск, карта исходников, правила безопасности и чек-лист выпуска.
 
+**Единый план запуска и проверенный статус:** [`docs/MIRRAI_LAUNCH_PLAYBOOK_RU.md`](docs/MIRRAI_LAUNCH_PLAYBOOK_RU.md). Это главная точка входа для последовательной сборки демо, SaaS staging и первого пилота.
+
 Подробная схема компонентов, потоков данных, установки виджета и границ готовности к production описана в [`docs/ARCHITECTURE_RU.md`](docs/ARCHITECTURE_RU.md).
 
 План выпуска SaaS и настройка Cloudflare staging/production: [`docs/SAAS_V1_ROADMAP_RU.md`](docs/SAAS_V1_ROADMAP_RU.md), [`docs/CLOUDFLARE_DEPLOYMENT_RU.md`](docs/CLOUDFLARE_DEPLOYMENT_RU.md).

@@ -44,9 +44,13 @@ jobs:
       MIRRAI_APP_ORIGIN: ${{ vars.MIRRAI_APP_ORIGIN }}
       MIRRAI_OPERATOR_EMAIL: ${{ vars.MIRRAI_OPERATOR_EMAIL }}
       MAIL_FROM: ${{ vars.MAIL_FROM }}
+      RECONSTRUCTION_API_URL: ${{ vars.RECONSTRUCTION_API_URL }}
+      HUGGINGFACE_SPACE_URL: ${{ vars.HUGGINGFACE_SPACE_URL }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      RECONSTRUCTION_API_TOKEN: ${{ secrets.RECONSTRUCTION_API_TOKEN }}
+      HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

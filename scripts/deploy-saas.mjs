@@ -3,6 +3,7 @@ import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { cloudflareWorkerVars, cloudflareWorkerSecrets } from "../lib/saas-deploy-config.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const target = process.env.MIRRAI_DEPLOY_ENV;
@@ -56,11 +57,7 @@ const config = {
     : { r2_buckets: [{ binding: "UPLOADS", bucket_name: bucketName }] }),
   workers_dev: true,
   observability: { enabled: true, logs: { enabled: true, head_sampling_rate: 1 } },
-  vars: {
-    APP_ORIGIN: appOrigin,
-    MIRRAI_OPERATOR_EMAIL: operatorEmail,
-    MAIL_FROM: process.env.MAIL_FROM ?? "",
-  },
+  vars: cloudflareWorkerVars(process.env),
 };
 
 const configExists = await access(configPath).then(() => true, () => false);
@@ -68,11 +65,7 @@ if (configExists) fail("wrangler.jsonc already exists; refusing to overwrite a l
 
 const tempDir = await mkdtemp(path.join(tmpdir(), "mirrai-deploy-"));
 const secretsPath = path.join(tempDir, "worker-secrets.json");
-const secrets = Object.fromEntries(
-  ["RESEND_API_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"].flatMap((name) =>
-    process.env[name] ? [[name, process.env[name]]] : [],
-  ),
-);
+const secrets = cloudflareWorkerSecrets(process.env);
 let configCreated = false;
 
 function run(command, args) {
