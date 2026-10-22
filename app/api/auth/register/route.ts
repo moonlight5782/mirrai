@@ -5,9 +5,12 @@ import { authUsers } from "../../../../db/schema";
 import { rateLimitPolicy, rateLimitHeaders } from "../../../../lib/rate-limit";
 import { credentialsInput } from "../../../../lib/auth-input.mjs";
 import { mailConfiguration, sendAccountAction } from "../../../../lib/account-mail";
+import { env } from "cloudflare:workers";
+import { passwordAuthAllowed } from "../../../../lib/auth-mode.mjs";
 
 export async function POST(request: Request) {
   if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
+  if (!passwordAuthAllowed(env.AUTH_MODE)) return Response.json({ error: "google_only" }, { status: 403 });
   const input = credentialsInput(await request.json().catch(() => null), true);
   if (!input) return Response.json({ error: "invalid_fields" }, { status: 400 });
   if (!validPassword(input.password)) return Response.json({ error: "invalid_password" }, { status: 400 });

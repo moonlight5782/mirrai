@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   if (domainTaken) return Response.json({ error: "domain_exists" }, { status: 409 });
   const slug = `${slugify(name)}-${crypto.randomUUID().slice(0, 8)}`;
   try {
-    const created = await createMerchantShop(env.DB!, { slug, name, ...website, platform, userId: user.userId, email: user.email, trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString() });
+    const created = await createMerchantShop(env.DB!, { slug, name, ...website, platform, userId: user.userId, email: user.email });
     if (!created) {
       const existing = await authorizedShop(user);
       return Response.json(existing ? { error: "shop_exists", shop: { slug: existing.shop.slug } } : { error: "domain_exists" }, { status: 409 });

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { cloudflareWorkerVars, cloudflareWorkerSecrets } from "../lib/saas-deploy-config.mjs";
+import { resolveAuthMode } from "../lib/auth-mode.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const target = process.env.MIRRAI_DEPLOY_ENV;
@@ -25,7 +26,6 @@ const kvNamespaceId = process.env.MIRRAI_KV_NAMESPACE_ID;
 const bucketName = process.env.MIRRAI_R2_BUCKET_NAME;
 const appOrigin = process.env.MIRRAI_APP_ORIGIN;
 const operatorEmail = process.env.MIRRAI_OPERATOR_EMAIL?.trim().toLowerCase();
-if (!process.env.CLOUDFLARE_API_TOKEN) fail("CLOUDFLARE_API_TOKEN is not configured.");
 if (!/^[a-f0-9]{32}$/i.test(accountId ?? "")) fail("CLOUDFLARE_ACCOUNT_ID must be a 32-character account ID.");
 if (!/^[a-f0-9-]{36}$/i.test(databaseId ?? "")) fail("MIRRAI_D1_DATABASE_ID must be a D1 database UUID.");
 if (storageMode !== "kv" && storageMode !== "r2") fail("MIRRAI_STORAGE_MODE must be kv or r2.");
@@ -40,7 +40,12 @@ try {
   fail("MIRRAI_APP_ORIGIN must be a canonical HTTPS origin without a path.");
 }
 if (!operatorEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(operatorEmail)) fail("MIRRAI_OPERATOR_EMAIL must be set for operator access.");
-if (!process.env.RESEND_API_KEY || !process.env.MAIL_FROM) fail("RESEND_API_KEY and MAIL_FROM are required so users can verify their email and recover access.");
+let authMode;
+try {
+  authMode = resolveAuthMode(process.env);
+} catch (error) {
+  fail(error.message);
+}
 
 const configPath = path.join(root, "wrangler.jsonc");
 const config = {
@@ -57,7 +62,7 @@ const config = {
     : { r2_buckets: [{ binding: "UPLOADS", bucket_name: bucketName }] }),
   workers_dev: true,
   observability: { enabled: true, logs: { enabled: true, head_sampling_rate: 1 } },
-  vars: cloudflareWorkerVars(process.env),
+  vars: { ...cloudflareWorkerVars(process.env), AUTH_MODE: authMode },
 };
 
 const configExists = await access(configPath).then(() => true, () => false);

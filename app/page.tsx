@@ -9,6 +9,7 @@ import {
 } from "../lib/viewer-geometry.mjs";
 import { useI18n } from "./language-provider";
 import { localizeCatalogItem } from "../lib/catalog-localization.mjs";
+import { MarketingHome } from "./marketing-home";
 
 type View = "landing" | "viewer";
 type UploadState = "idle" | "ready" | "error";
@@ -36,6 +37,7 @@ type Product = {
   price: string;
   color: string;
   model: string;
+  image?: string;
   iosModel?: string;
   textured: boolean;
   dimensions: Dimensions;
@@ -53,48 +55,52 @@ type ModelViewerElement = HTMLElement & {
 
 const products: Product[] = [
   {
-    id: "cloud",
-    name: "Кресло Cloud",
+    id: "alba",
+    name: "Кресло Alba",
     category: "Кресла",
-    material: "Букле, светлый беж",
-    price: "67 000 ₽",
-    color: "#d2bda8",
-    model: "/chair.glb",
+    material: "Ткань VIC, матовый металл",
+    price: "6 600 Lei",
+    color: "#55565a",
+    model: "/catalog/alba-chair-trellis2-q8-pbr.glb",
+    image: "/catalog-sources/hugge-md/89990-1.jpg",
     textured: true,
-    dimensions: { width: 84, height: 76, depth: 82 },
+    dimensions: { width: 62, height: 90, depth: 86 },
   },
   {
-    id: "arc",
-    name: "Стул Arc",
-    category: "Стулья",
-    material: "Дуб и ткань",
-    price: "29 000 ₽",
-    color: "#92765c",
-    model: "/catalog/arc-chair.glb",
+    id: "ria-sofa",
+    name: "Диван Ria Actona, 150 x 84 x 78 см",
+    category: "Диваны",
+    material: "Тканевая обивка",
+    price: "15 500 Lei",
+    color: "#77736e",
+    model: "/catalog/hugge-109553-trellis2-q8-pbr.glb",
+    image: "/catalog-sources/hugge-md/109553-1.jpg",
     textured: true,
-    dimensions: { width: 52, height: 81, depth: 55 },
+    dimensions: { width: 150, height: 78, depth: 84 },
   },
   {
-    id: "halo",
-    name: "Торшер Halo",
-    category: "Освещение",
-    material: "Латунь, матовый металл",
-    price: "18 400 ₽",
-    color: "#d0be85",
-    model: "/catalog/halo-lamp.glb",
-    textured: true,
-    dimensions: { width: 48, height: 158, depth: 48 },
-  },
-  {
-    id: "plane",
-    name: "Стол Plane",
+    id: "blackburn-table",
+    name: "Стол Blackburn Actona, 240 x 97 x 75 см",
     category: "Столы",
-    material: "Натуральный дуб",
-    price: "74 000 ₽",
-    color: "#aa8763",
-    model: "/catalog/plane-table.glb",
+    material: "Керамика, стекло и сталь",
+    price: "25 260 Lei",
+    color: "#343532",
+    model: "/catalog/hugge-100326-trellis2-q8-pbr.glb",
+    image: "/catalog-sources/hugge-md/100326-1.jpg",
     textured: true,
-    dimensions: { width: 160, height: 75, depth: 86 },
+    dimensions: { width: 240, height: 75, depth: 97 },
+  },
+  {
+    id: "neptun-desk",
+    name: "Стол письменный Actona Neptun, дерево",
+    category: "Столы",
+    material: "Дерево",
+    price: "4 900 Lei",
+    color: "#a88b69",
+    model: "/catalog/hugge-85345-trellis2-q8-pbr.glb",
+    image: "/catalog-sources/hugge-md/85345-1.jpg",
+    textured: true,
+    dimensions: { width: 110, height: 77, depth: 50 },
   },
 ];
 
@@ -815,8 +821,8 @@ export default function Home({
                     className={`product ${active === index && !customName ? "active" : ""}`}
                     onClick={() => selectProduct(index)}
                   >
-                    <i style={{ background: item.color }}>
-                      <b>▰</b>
+                    <i style={{ backgroundColor: item.color, backgroundImage: item.image ? `url("${item.image}")` : undefined }}>
+                      {!item.image && <b>▰</b>}
                     </i>
                     <span>
                       <small>{item.category}</small>
@@ -1116,6 +1122,9 @@ export default function Home({
         </section>
       </main>
     );
+
+  if (view === "landing" && !isWidget)
+    return <MarketingHome onPreview={() => openViewer(0)} />;
 
   return (
     <main>

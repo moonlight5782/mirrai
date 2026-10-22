@@ -7,11 +7,13 @@ export function AuthForm({
   mode,
   returnTo,
   googleEnabled = false,
+  googleOnly = false,
   oauthError,
 }: {
   mode: "login" | "register";
   returnTo: string;
   googleEnabled?: boolean;
+  googleOnly?: boolean;
   oauthError?: string;
 }) {
   const { t } = useI18n();
@@ -21,6 +23,27 @@ export function AuthForm({
   const [registered, setRegistered] = useState<{
     verificationEmailSent: boolean;
   } | null>(null);
+  if (googleOnly) {
+    return (
+      <div className="merchant-auth-form">
+        {oauthError && (
+          <p role="alert">
+            {oauthError === "email_exists"
+              ? t("Этот адрес уже связан с другим способом входа. Обратитесь в поддержку.")
+              : t("Не удалось войти через Google. Попробуйте ещё раз.")}
+          </p>
+        )}
+        {googleEnabled ? (
+          <a href={`/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`}>
+            {t("Продолжить с Google")} →
+          </a>
+        ) : (
+          <p role="status">{t("Вход через Google пока не настроен.")}</p>
+        )}
+        <p>{t("Вход и восстановление доступа защищены аккаунтом Google.")}</p>
+      </div>
+    );
+  }
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);

@@ -5,6 +5,7 @@ import { getChatGPTUser, chatGPTSignInPath } from "../chatgpt-auth";
 import { authorizedShop, isPlatformOperator } from "../../db/authorization";
 import { OnboardingForm } from "./onboarding-form";
 import { getI18n } from "../../lib/i18n-server";
+import { isGoogleOnlyAuth } from "../../lib/auth-mode";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,6 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function OnboardingPage() {
   const { t } = await getI18n();
+  const googleOnly = await isGoogleOnlyAuth();
 
   const user = await getChatGPTUser();
   if (!user)
@@ -30,7 +32,9 @@ export default async function OnboardingPage() {
           <h1>{t("Подключите магазин")}</h1>
           <span>
             {t(
-              "Создайте отдельный аккаунт магазина или войдите по рабочей почте.",
+              googleOnly
+                ? "Создайте аккаунт или войдите через Google."
+                : "Создайте отдельный аккаунт магазина или войдите по рабочей почте.",
             )}
           </span>
           <a href="/register?returnTo=%2Fonboarding">

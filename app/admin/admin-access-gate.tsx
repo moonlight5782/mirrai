@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- full document navigation is intentional for the deployed vinext runtime */
 import { chatGPTSignInPath } from "../chatgpt-auth";
 import { getI18n } from "../../lib/i18n-server";
+import { isGoogleOnlyAuth } from "../../lib/auth-mode";
 
 type AdminSection =
   | "Клиенты"
@@ -48,6 +49,7 @@ export async function AdminAccessGate({
   returnTo: string;
 }) {
   const { t } = await getI18n();
+  const googleOnly = await isGoogleOnlyAuth();
 
   return (
     <main className="admin-gate">
@@ -65,7 +67,9 @@ export async function AdminAccessGate({
           </h1>
           <span>
             {t(
-              "Войдите по рабочей почте и паролю. После входа мы вернём вас именно в этот раздел.",
+              googleOnly
+                ? "Войдите через Google. После входа мы вернём вас именно в этот раздел."
+                : "Войдите по рабочей почте и паролю. После входа мы вернём вас именно в этот раздел.",
             )}
           </span>
           <a className="admin-gate-login" href={chatGPTSignInPath(returnTo)}>

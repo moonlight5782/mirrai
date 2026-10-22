@@ -4,9 +4,12 @@ import { getDb } from "../../../../db";
 import { authLoginAttempts, authUsers } from "../../../../db/schema";
 import { credentialsInput } from "../../../../lib/auth-input.mjs";
 import { rateLimitPolicy, rateLimitHeaders } from "../../../../lib/rate-limit";
+import { env } from "cloudflare:workers";
+import { passwordAuthAllowed } from "../../../../lib/auth-mode.mjs";
 
 export async function POST(request: Request) {
   if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
+  if (!passwordAuthAllowed(env.AUTH_MODE)) return Response.json({ error: "google_only" }, { status: 403 });
   const throttle = await rateLimitPolicy(request, { scope: "login", ipLimit: 30, windowSeconds: 900 });
   if (!throttle.allowed) return Response.json({ error: "rate_limited" }, { status: 429, headers: rateLimitHeaders(throttle.retryAfter) });
   const input = credentialsInput(await request.json().catch(() => null));

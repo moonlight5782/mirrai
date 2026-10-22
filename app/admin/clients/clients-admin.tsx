@@ -9,6 +9,7 @@ type Client = {
   name: string;
   slug: string;
   subscriptionStatus: string;
+  accessAllowed: boolean;
   websiteUrl: string | null;
   installationStatus: string;
   plan: string;
@@ -26,6 +27,7 @@ export function ClientsAdmin({ displayName }: { displayName: string }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [invitationUrl, setInvitationUrl] = useState("");
+  const [accessBusy, setAccessBusy] = useState("");
   const load = useCallback(async () => {
     const response = await fetch("/api/admin/clients", { cache: "no-store" });
     if (response.ok) setItems((await response.json()).items);
@@ -54,6 +56,23 @@ export function ClientsAdmin({ displayName }: { displayName: string }) {
     );
     await load();
   }
+  async function setAccess(client: Client, enabled: boolean) {
+    setAccessBusy(client.slug);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/clients", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "access", shop: client.slug, enabled, days: 30 }),
+      });
+      if (!response.ok) throw new Error();
+      await load();
+    } catch {
+      setError(t("Не удалось изменить доступ магазина. Обновите страницу и попробуйте ещё раз."));
+    } finally {
+      setAccessBusy("");
+    }
+  }
   return (
     <main className="admin-shell">
       <AdminNavigation active="clients" displayName={displayName} />
@@ -63,15 +82,18 @@ export function ClientsAdmin({ displayName }: { displayName: string }) {
             <p>{t("ОПЕРАЦИОННЫЙ ЦЕНТР")}</p>
             <h1>{t("Магазины")}</h1>
           </div>
-          <button
-            className="admin-primary"
-            onClick={() => {
-              setInvitationUrl("");
-              setCreating(true);
-            }}
-          >
-            {t("＋ Добавить клиента")}
-          </button>
+          <div className="client-header-actions">
+            <a href="/admin/billing">{t("Заявки и расчёты →")}</a>
+            <button
+              className="admin-primary"
+              onClick={() => {
+                setInvitationUrl("");
+                setCreating(true);
+              }}
+            >
+              {t("＋ Добавить клиента")}
+            </button>
+          </div>
         </header>
         {invitationUrl && (
           <section className="invite-result">
@@ -129,6 +151,10 @@ export function ClientsAdmin({ displayName }: { displayName: string }) {
               </header>
               <dl>
                 <div>
+                  <dt>{t("Доступ виджета")}</dt>
+                  <dd>{item.accessAllowed ? t("Включён") : t("Отключён")}</dd>
+                </div>
+                <div>
                   <dt>{t("Владелец")}</dt>
                   <dd>{item.ownerEmail || t("Не назначен")}</dd>
                 </div>
@@ -161,6 +187,18 @@ export function ClientsAdmin({ displayName }: { displayName: string }) {
                   </dd>
                 </div>
               </dl>
+              <div className="client-access-actions">
+                <span>{item.accessAllowed ? t("Доступ виджета включён") : t("Виджет отключён; кабинет магазина доступен")}</span>
+                {item.accessAllowed ? (
+                  <button type="button" disabled={accessBusy === item.slug} onClick={() => void setAccess(item, false)}>
+                    {accessBusy === item.slug ? t("Сохраняем…") : t("Отключить доступ")}
+                  </button>
+                ) : (
+                  <button type="button" disabled={accessBusy === item.slug} onClick={() => void setAccess(item, true)}>
+                    {accessBusy === item.slug ? t("Сохраняем…") : t("Разрешить на 30 дней")}
+                  </button>
+                )}
+              </div>
               <footer>
                 <a href={`/admin?shop=${encodeURIComponent(item.slug)}`}>
                   {t("Обзор")}

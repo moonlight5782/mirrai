@@ -6,6 +6,7 @@ import { productModels, productVariants, products, shopInvites, shopMembers, sho
 import { randomToken, sha256 } from "../../../auth";
 import { subscriptionAccess } from "../../../../db/subscription.mjs";
 import { catalogReadiness } from "../../../../lib/catalog-readiness.mjs";
+import { manualAccessUpdate } from "../../../../lib/manual-access.mjs";
 
 function safeSlug(value: string) { return value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60); }
 
@@ -20,15 +21,17 @@ export async function GET() {
   const members = await db.select().from(shopMembers).where(eq(shopMembers.role, "owner"));
   const events = await db.select({ shopId: widgetEvents.shopId, event: widgetEvents.event, count: sql<number>`count(*)` }).from(widgetEvents).where(sql`julianday(${widgetEvents.createdAt}) >= julianday(${new Date(Date.now() - 30 * 86400000).toISOString()})`).groupBy(widgetEvents.shopId, widgetEvents.event);
   const invites = await db.select().from(shopInvites);
-  return Response.json({ items: allShops.map(shop => {
+  const items = allShops.map(shop => {
     const catalog = rows.filter(row => row.shopId === shop.id), access = subscriptionAccess(shop);
-    return { ...shop, ...catalogReadiness(catalog, variants), subscriptionStatus: access.status, expiresAt: access.expiresAt,
+    return { ...shop, ...catalogReadiness(catalog, variants), subscriptionStatus: access.status, accessAllowed: access.allowed, expiresAt: access.expiresAt,
       ownerEmail: members.find(member => member.shopId === shop.id)?.email || invites.find(invite => invite.shopId === shop.id && invite.role === "owner")?.email || "",
       events30d: Object.fromEntries(events.filter(event => event.shopId === shop.id).map(event => [event.event, event.count])) };
-  }) }, { headers: { "Cache-Control": "no-store" } });
+  }).sort((left, right) => Number(left.accessAllowed) - Number(right.accessAllowed) || String(right.createdAt).localeCompare(String(left.createdAt)));
+  return Response.json({ items }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
+  if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
   if (!await isPlatformOperator(user)) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -39,9 +42,22 @@ export async function POST(request: Request) {
   if (!name || slug.length < 3 || !/^\S+@\S+\.\S+$/.test(ownerEmail)) return Response.json({ error: "invalid_payload" }, { status: 400 });
   const db = getDb();
   try {
-    const [created] = await db.insert(shops).values({ name, slug, subscriptionStatus: "trial", trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString(), websiteUrl: body.websiteUrl?.trim().slice(0, 300) || null, plan: "pilot" }).returning();
+    const [created] = await db.insert(shops).values({ name, slug, subscriptionStatus: "inactive", websiteUrl: body.websiteUrl?.trim().slice(0, 300) || null, plan: "pilot" }).returning();
     const token = randomToken();
     await db.insert(shopInvites).values({ shopId: created.id, email: ownerEmail, role: "owner", tokenHash: await sha256(token), expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() });
     return Response.json({ ok: true, shop: created, invitationUrl: `/invite?token=${encodeURIComponent(token)}` }, { status: 201 });
   } catch { return Response.json({ error: "slug_exists" }, { status: 409 }); }
+}
+
+export async function PATCH(request: Request) {
+  if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
+  const user = await getChatGPTUser();
+  if (!user) return Response.json({ error: "authentication_required" }, { status: 401 });
+  if (!await isPlatformOperator(user)) return Response.json({ error: "forbidden" }, { status: 403 });
+  const body = await request.json().catch(() => null) as { action?: string; shop?: string; enabled?: boolean; days?: number } | null;
+  if (!body || body.action !== "access" || typeof body.shop !== "string" || !/^[a-z0-9-]{3,60}$/.test(body.shop)) return Response.json({ error: "invalid_payload" }, { status: 400 });
+  const update = manualAccessUpdate(body.enabled, body.days);
+  if (!update) return Response.json({ error: "invalid_access_period" }, { status: 400 });
+  const rows = await getDb().update(shops).set(update).where(eq(shops.slug, body.shop)).returning({ slug: shops.slug, subscriptionStatus: shops.subscriptionStatus, subscriptionEndsAt: shops.subscriptionEndsAt });
+  return rows.length ? Response.json({ ok: true, shop: rows[0] }) : Response.json({ error: "shop_not_found" }, { status: 404 });
 }

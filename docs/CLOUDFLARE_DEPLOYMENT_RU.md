@@ -52,20 +52,24 @@ Worker secrets; доступ к остальным аккаунтам не ну�
 - `MIRRAI_KV_NAMESPACE_ID` — ID KV namespace staging;
 - `MIRRAI_R2_BUCKET_NAME` — только для R2 окружения;
 - `MIRRAI_APP_ORIGIN` — канонический HTTPS origin Worker или домена;
+- `MIRRAI_AUTH_MODE` — `google` для staging без писем; в этом режиме вход и
+  создание аккаунта доступны только через Google;
 - `MIRRAI_OPERATOR_EMAIL` — почта владельца платформы, с которой он войдёт;
-- `MAIL_FROM` — подтверждённый отправитель писем.
+- `MAIL_FROM` — подтверждённый отправитель, только если выбран режим `password`.
 - `RECONSTRUCTION_API_URL` — необязательный HTTPS URL собственного шлюза генерации;
 - `HUGGINGFACE_SPACE_URL` — необязательный HTTPS URL Space с Hunyuan3D-2.1 или совместимым API.
 
 В каждой среде создать secrets:
 
-- `CLOUDFLARE_WORKERS_API_TOKEN` — отдельный токен Worker/D1;
-- `RESEND_API_KEY` — ключ отправки писем для подтверждения почты и сброса пароля.
+- `CLOUDFLARE_WORKERS_API_TOKEN` — отдельный токен Worker/D1 для GitHub Actions;
+- `RESEND_API_KEY` — нужен только для режима `password`, для подтверждения почты и сброса пароля.
+- `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` — OAuth Web client для режима `google`;
 - `RECONSTRUCTION_API_TOKEN` — токен собственного шлюза, если он используется;
 - `HUGGINGFACE_TOKEN` — токен доступа к закрытому Hugging Face Space, если он используется.
 
-`GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` необязательны: Google-вход включится
-после их добавления. Redirect URI должен совпадать с
+`GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` нужны для режима `google`. В нём
+почта через MIRRAI не отправляется: Google подтверждает email и отвечает за
+восстановление доступа; парольные API блокируются. Redirect URI должен совпадать с
 `<MIRRAI_APP_ORIGIN>/api/auth/google/callback`.
 
 Если URL сервиса генерации не задан, приложение и кабинет могут работать, но
@@ -74,16 +78,17 @@ Worker secrets; доступ к остальным аккаунтам не ну�
 публикуются. Наличие ссылки на Hugging Face Space само по себе не означает, что
 Space запущен, имеет GPU-квоту или доступен на бесплатном тарифе.
 
-Для публичного запуска почтовый отправитель должен быть подтверждён у почтового
-провайдера, иначе пользователи не смогут завершить подтверждение почты и
-восстановление доступа. Полноценный платёжный провайдер на этом этапе ещё не
-подключён.
+Для `password`-режима почтовый отправитель должен быть подтверждён у почтового
+провайдера. В режиме `google` домен отправителя не нужен. Пользователям нужно
+разрешить вход в Google OAuth consent screen; тестовый режим Google пускает только
+добавленные тестовые аккаунты. Полноценный платёжный провайдер пока не подключён.
 
 ## Первый staging запуск
 
 После создания ресурсов и GitHub Environment открыть Actions → **Deploy MIRRAI
-SaaS** → Run workflow. Workflow публикует только в `staging`. После завершения проверить вход,
-подтверждение почты, восстановление пароля, создание магазина, загрузку файла,
+SaaS** → Run workflow. Workflow публикует только в `staging`. Перед запуском
+добавить `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` в secrets окружения. После
+завершения проверить Google-вход, создание магазина, загрузку файла,
 изоляцию магазина, установку виджета и события. `MIRRAI_APP_ORIGIN` в настройках
 GitHub Environment задаёт адрес самого staging Worker. Отдельная переменная
 репозитория `MIRRAI_APP_ORIGIN` управляет scheduled generation queue; она пока
@@ -99,13 +104,12 @@ Production сейчас не развёртывается: он требует �
 
 ## Текущие ограничения
 
-- Этот workflow пока не запускался: staging D1/KV и базовые GitHub variables
-  созданы. Нужны deploy-токен, почтовый provider/секреты, `MIRRAI_OPERATOR_EMAIL`
-  и `MAIL_FROM`.
+- Staging использует Google-only auth. Нужны deploy-токен, Google OAuth client ID
+  и secret, `MIRRAI_OPERATOR_EMAIL` и значения Cloudflare/D1/KV.
 - База, загрузки, пользователи и секреты предыдущего размещения не переносятся
   автоматически.
-- Google OAuth, письма и оплата подтверждаются только после подключения реальных
-  credentials и проверки в staging.
+- Google OAuth не проверен end-to-end до подключения credentials и тестового
+  входа. В режиме Google письма не используются; оплата не подключена.
 - Для генерации нужны отдельно настроенный GPU-шлюз/Space и проверка полного
   цикла заявки; этот workflow передаёт его настройки, но не создаёт GPU-сервис.
 - Static demo CI не является проверкой SaaS deployment.

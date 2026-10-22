@@ -14,9 +14,10 @@ SaaS и не доказательство интеграции в чужую т�
 
 Для первого staging подготовлены отдельные Cloudflare D1 и KV, а GitHub Actions
 workflow может выполнить проверку, применить миграции и опубликовать Worker.
-Остаются Cloudflare deploy-secret, Resend sender/key и email владельца платформы;
-workflow не запускался. Оплата, checkout и webhook платежей не реализованы.
-Google OAuth требует credentials. Подробный фактический статус — в
+Остаются Cloudflare deploy-secret, Google OAuth credentials и email владельца
+платформы; staging настроен как Google-only, поэтому Resend sender/key не нужны.
+Workflow не запускался. Оплата, checkout и webhook платежей не реализованы.
+Google OAuth ещё требует реальных credentials и end-to-end проверки. Подробный статус — в
 [`CLOUDFLARE_DEPLOYMENT_RU.md`](CLOUDFLARE_DEPLOYMENT_RU.md) и
 [`SAAS_V1_ROADMAP_RU.md`](SAAS_V1_ROADMAP_RU.md).
 
@@ -67,6 +68,44 @@ flowchart LR
     viewer --> events[/api/widget/events]
     events --> db
 ```
+
+## Сквозной путь: покупатель → магазин → оператор MIRRAI
+
+```mermaid
+flowchart TD
+    landing[Публичная главная] --> demo[3D-пример и демо-магазин]
+    landing --> google[Регистрация / вход Google]
+    google --> request[Название, сайт и платформа магазина]
+    request --> cabinet[Кабинет создаётся без доступа виджета]
+    cabinet --> ownerCatalog[Импорт товаров, фото, GLB / USDZ]
+    operator[Оператор MIRRAI] --> inbox[Клиенты: новые магазины без доступа выше]
+    operator --> requests[Тарифы и заявки: расчёты и ответы]
+    inbox --> inspect[Каталог магазина: проверить фото, габариты и модели]
+    inspect --> approve{Модель прошла проверку?}
+    approve -->|Нет| revise[Оставить на проверке / исправить]
+    approve -->|Да| publish[Опубликовать модель]
+    operator --> access[Выдать доступ на 30 дней или отключить]
+    access --> gate{Доступ включён?}
+    publish --> gate
+    gate -->|Да| widget[Виджет магазина показывает опубликованные товары]
+    gate -->|Нет| noWidget[Виджет не открывает товар; кабинет остаётся доступен]
+    buyer[Покупатель магазина] --> widget
+```
+
+Заявка на подключение из `/onboarding` создаёт кабинет владельца и запись
+магазина со статусом `inactive`: владелец сразу может подготовить каталог, но
+публичный виджет не работает до решения оператора. В `/admin/clients` оператор
+видит новые магазины первыми, открывает каталог и может включить доступ на 30
+дней либо отозвать его. Это ручной пилотный доступ, не подтверждение оплаты.
+В каталоге оператор проверяет и публикует модель; `/admin/billing` содержит
+отдельные заявки на расчёт и ответы клиентам. Платёжный провайдер и списания
+пока не подключены.
+
+Вход через Google реализован на `/login` и `/register`; создание пользователя не
+назначает ему роль оператора. Для фактического входа на опубликованном сайте
+Google Client ID/Secret, канонический origin и `MIRRAI_OPERATOR_EMAIL` должны
+быть настроены в окружении. Административные API проверяют роль оператора на
+сервере, а не только скрывают ссылки в интерфейсе.
 
 ## Как магазин устанавливает виджет сейчас
 
@@ -319,7 +358,7 @@ SDK отправляет `widget_open`, `model_ready`, `ar_open`, `object_placed
 Приоритет P0 до самостоятельных платных регистраций:
 
 1. Stripe/Paddle checkout, webhooks и идемпотентная таблица платежных событий.
-2. Подключить отправителя почты и проверить реальную доставку: email verification и password reset реализованы, но требуют `APP_ORIGIN`, `RESEND_API_KEY`, `MAIL_FROM`. Уведомления о входе/окончании подписки ещё не реализованы.
+2. Для Google-only staging задать `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET`; почта не используется. Для будущего password-режима отдельно подключить Resend sender и проверить `APP_ORIGIN`, `RESEND_API_KEY`, `MAIL_FROM`. Уведомления о входе/окончании подписки ещё не реализованы.
 3. Sentry или аналог для frontend/worker, uptime monitor и alert на очередь `failed`.
 4. Синтетический тест: bootstrap → config → GLB HEAD → viewer.
 5. E2E-матрица реальных тестовых магазинов по каждой поддерживаемой CMS.
@@ -330,7 +369,7 @@ SDK отправляет `widget_open`, `model_ready`, `ar_open`, `object_placed
 
 Приоритет P1 после первых пилотов:
 
-1. Google OAuth как дополнительный вход.
+1. Подключить Google OAuth credentials для Google-only staging; затем отдельно решить, нужен ли парольный режим с почтовым провайдером.
 2. API-ключи только для серверных интеграций магазинов, с scopes, expiry и revoke.
 3. Webhook/API каталога для крупных клиентов.
 4. Автоматический canary и staged rollout SDK.

@@ -5,6 +5,7 @@ import { getCurrentUser, safeReturnTo } from "../auth";
 import { AuthForm } from "../login/auth-form";
 import { googleConfiguration } from "../../lib/google-auth";
 import { getI18n } from "../../lib/i18n-server";
+import { isGoogleOnlyAuth } from "../../lib/auth-mode";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,6 +31,7 @@ export default async function RegisterPage({
     ? params.invite[0]
     : params.invite;
   const returnTo = safeReturnTo(raw, "/onboarding");
+  const googleOnly = await isGoogleOnlyAuth();
   if (await getCurrentUser()) redirect(returnTo);
   return (
     <main className="merchant-auth">
@@ -52,13 +54,14 @@ export default async function RegisterPage({
           mode="register"
           returnTo={returnTo}
           googleEnabled={Boolean(googleConfiguration())}
+          googleOnly={googleOnly}
         />
-        <footer>
+        {!googleOnly && <footer>
           {t("Уже есть аккаунт?")}{" "}
           <a href={`/login?returnTo=${encodeURIComponent(returnTo)}`}>
             {t("Войти")}
           </a>
-        </footer>
+        </footer>}
       </section>
     </main>
   );

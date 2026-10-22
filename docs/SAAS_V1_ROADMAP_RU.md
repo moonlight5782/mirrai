@@ -15,14 +15,16 @@
   админки, виджета, событий, аналитики и очереди. Это код в репозитории; SaaS
   Worker не опубликован, поэтому публичного кабинета пока нет.
 - **Staging-инфраструктура:** отдельные Cloudflare D1 и KV созданы; GitHub
-  Environment и deploy workflow настроены. Workflow ещё не запускался. Нужны
-  отдельный Worker deploy secret, Resend API key/sender и `MIRRAI_OPERATOR_EMAIL`.
+  Environment и deploy workflow настроены. Workflow ещё не запускался. Staging
+  выбрано в режиме Google-only; нужны deploy token, Google OAuth credentials и
+  `MIRRAI_OPERATOR_EMAIL`, почтовый sender не требуется.
   Бесплатное staging использует KV; R2 не включён.
 - **Данные:** новая staging D1 заполняется миграциями, но пользовательские данные,
   аккаунты и файлы со старого размещения автоматически не копируются.
 - **Оплата:** checkout и webhooks отсутствуют; тестовую/активную подписку нельзя
   считать оплатой. Не показывать магазинам ложный работающий billing flow.
-- **Google-вход:** callback реализован, но Google Client ID/Secret отсутствуют.
+- **Google-вход:** callback реализован; Client ID/Secret отсутствуют, end-to-end
+  вход ещё не проверен. Password login/register будут закрыты в Google-only staging.
 - **Генерация:** код очереди и ручной QA есть, но production GPU-сервис и
   сквозной SaaS job flow не подтверждены на staging. Не обещать генерацию всего
   каталога автоматически.

@@ -23,14 +23,24 @@ test("language is resolved before SSR and persists through the locale cookie", a
   }
 });
 
-test("server renders the furniture-first MIRRAI experience", async () => {
+test("server renders the product-led MIRRAI homepage with the correct demo model", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
   assert.match(html, /MIRRAI — мебель в вашем пространстве/i);
-  assert.match(html, /AR ДЛЯ МЕБЕЛЬНЫХ МАГАЗИНОВ/i);
-  assert.match(html, /Мебель —/i);
+  assert.match(html, /ПРИМЕРКА МЕБЕЛИ В ДОПОЛНЕННОЙ РЕАЛЬНОСТИ/i);
+  assert.match(html, /Сначала увидеть дома/i);
+  assert.match(html, /alba-chair-trellis2-q8-pbr\.glb/i);
+  assert.match(html, /Ткань VIC · 62 × 86 × 90 см/i);
+  assert.match(html, /https:\/\/mirrai-furniture-demo\.pages\.dev\//i);
+  assert.doesNotMatch(html, /HUGGE|href="\/demo-store"/i);
+  // The hero is server-rendered; the interactive product picker is populated
+  // from the client-side product data in app/page.tsx after hydration.
+  assert.match(page, /hugge-109553-trellis2-q8-pbr\.glb/i);
+  assert.match(page, /hugge-100326-trellis2-q8-pbr\.glb/i);
+  assert.match(page, /hugge-85345-trellis2-q8-pbr\.glb/i);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
 });
 

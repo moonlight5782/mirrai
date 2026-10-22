@@ -24,6 +24,9 @@ test("creating a store creates its owner and retry cannot create a duplicate", a
   assert.equal(await createMerchantShop(db, { ...input, slug: "retry" }), false);
   const owner = sql.prepare("SELECT * FROM shop_members").get();
   assert.equal(owner.user_id, "owner-a"); assert.equal(owner.role, "owner");
+  const shop = sql.prepare("SELECT subscription_status,trial_ends_at FROM shops").get();
+  assert.equal(shop.subscription_status, "inactive");
+  assert.equal(shop.trial_ends_at, null);
   assert.equal(sql.prepare("SELECT count(*) n FROM shops").get().n, 1);
 });
 test("failed membership creation rolls back shop and permits a clean retry", async t => {
